@@ -1,0 +1,18 @@
+current directory: /Users/abbasshassan/Desktop/RamaytiLibrary/frontend/RamaytiLibraryApp/vendor/bundle/ruby/3.4.0/gems/nkf-0.2.0/ext/nkf
+/opt/homebrew/opt/ruby/bin/ruby extconf.rb
+creating Makefile
+
+current directory: /Users/abbasshassan/Desktop/RamaytiLibrary/frontend/RamaytiLibraryApp/vendor/bundle/ruby/3.4.0/gems/nkf-0.2.0/ext/nkf
+make DESTDIR\= sitearchdir\=./.gem.20250221-3160-4kch64 sitelibdir\=./.gem.20250221-3160-4kch64 clean
+
+current directory: /Users/abbasshassan/Desktop/RamaytiLibrary/frontend/RamaytiLibraryApp/vendor/bundle/ruby/3.4.0/gems/nkf-0.2.0/ext/nkf
+make DESTDIR\= sitearchdir\=./.gem.20250221-3160-4kch64 sitelibdir\=./.gem.20250221-3160-4kch64
+compiling nkf.c
+linking shared-object nkf.bundle
+
+current directory: /Users/abbasshassan/Desktop/RamaytiLibrary/frontend/RamaytiLibraryApp/vendor/bundle/ruby/3.4.0/gems/nkf-0.2.0/ext/nkf
+make DESTDIR\= sitearchdir\=./.gem.20250221-3160-4kch64 sitelibdir\=./.gem.20250221-3160-4kch64 install
+/usr/bin/install -c -m 0755 nkf.bundle ./.gem.20250221-3160-4kch64
+
+current directory: /Users/abbasshassan/Desktop/RamaytiLibrary/frontend/RamaytiLibraryApp/vendor/bundle/ruby/3.4.0/gems/nkf-0.2.0/ext/nkf
+make DESTDIR\= sitearchdir\=./.gem.20250221-3160-4kch64 sitelibdir\=./.gem.20250221-3160-4kch64 clean
