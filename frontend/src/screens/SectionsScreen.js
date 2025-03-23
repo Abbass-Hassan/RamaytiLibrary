@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 
+// 1) Import colors
+import colors from '../config/colors';
+
 const SectionsScreen = ({ route, navigation }) => {
   const { bookId } = route.params;
   const [sections, setSections] = useState([]);
 
   const fetchSections = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/api/books/${bookId}/sections`);
+      const response = await fetch(`http://10.0.2.2:3000/api/books/${bookId}/sections`);
       const data = await response.json();
       setSections(data);
     } catch (error) {
@@ -42,33 +45,31 @@ const SectionsScreen = ({ route, navigation }) => {
   );
 };
 
+export default SectionsScreen;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   listContainer: {
     paddingVertical: 10,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     marginHorizontal: 15,
     marginVertical: 7,
     padding: 15,
     borderRadius: 8,
-    // Android shadow
-    elevation: 3,
-    // iOS shadow
-    shadowColor: '#000',
+    elevation: 3, // Android shadow
+    shadowColor: colors.shadow, // iOS shadow
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
   sectionName: {
     fontSize: 18,
-    color: '#333',
+    color: colors.text,
     fontWeight: '500',
   },
 });
-
-export default SectionsScreen;

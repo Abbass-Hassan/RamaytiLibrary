@@ -4,10 +4,13 @@ const db = admin.firestore();
 exports.getAllBooks = async (req, res) => {
   try {
     const snapshot = await db.collection('books').get();
-    const books = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const books = snapshot.docs.map(doc => {
+      const data = doc.data();
+      if (data.pdfPath && data.pdfPath.includes('localhost')) {
+        data.pdfPath = data.pdfPath.replace('localhost', '10.0.2.2');
+      }
+      return { id: doc.id, ...data };
+    });
     res.json(books);
   } catch (error) {
     console.error('Error fetching books:', error);
@@ -16,65 +19,72 @@ exports.getAllBooks = async (req, res) => {
 };
 
 exports.getBookById = async (req, res) => {
-    try {
-      const { bookId } = req.params;
-      const docRef = db.collection('books').doc(bookId);
-      const docSnap = await docRef.get();
-  
-      if (!docSnap.exists) {
-        return res.status(404).json({ error: 'Book not found' });
-      }
-  
-      res.json({ id: docSnap.id, ...docSnap.data() });
-    } catch (error) {
-      console.error('Error fetching book:', error);
-      res.status(500).json({ error: 'Failed to get book' });
-    }
-  };
+  try {
+    const { bookId } = req.params;
+    const docRef = db.collection('books').doc(bookId);
+    const docSnap = await docRef.get();
 
-  exports.getBookSections = async (req, res) => {
-    try {
-      const { bookId } = req.params;
-      const docRef = db.collection('books').doc(bookId);
-      const docSnap = await docRef.get();
-  
-      if (!docSnap.exists) {
-        return res.status(404).json({ error: 'Book not found' });
-      }
-  
-      const bookData = docSnap.data();
-      const sections = bookData.sections || [];
-      res.json(sections);
-    } catch (error) {
-      console.error('Error fetching sections:', error);
-      res.status(500).json({ error: 'Failed to get sections' });
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'Book not found' });
     }
-  };
 
-  exports.redirectToPdf = async (req, res) => {
-    try {
-      const { bookId, sectionIndex } = req.params;
-      const docRef = db.collection('books').doc(bookId);
-      const docSnap = await docRef.get();
-  
-      if (!docSnap.exists) {
-        return res.status(404).json({ error: 'Book not found' });
-      }
-  
-      const bookData = docSnap.data();
-      const sections = bookData.sections || [];
-      const index = parseInt(sectionIndex, 10);
-  
-      if (index < 0 || index >= sections.length) {
-        return res.status(404).json({ error: 'Section not found' });
-      }
-  
-      const section = sections[index];
-      const page = section.page;
-      const pdfPath = bookData.pdfPath;
-      res.redirect(`${pdfPath}#page=${page}`);
-    } catch (error) {
-      console.error('Error redirecting to PDF:', error);
-      res.status(500).json({ error: 'Failed to redirect to PDF' });
+    const data = docSnap.data();
+    if (data.pdfPath && data.pdfPath.includes('localhost')) {
+      data.pdfPath = data.pdfPath.replace('localhost', '10.0.2.2');
     }
-  };
+    res.json({ id: docSnap.id, ...data });
+  } catch (error) {
+    console.error('Error fetching book:', error);
+    res.status(500).json({ error: 'Failed to get book' });
+  }
+};
+
+exports.getBookSections = async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const docRef = db.collection('books').doc(bookId);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    const bookData = docSnap.data();
+    const sections = bookData.sections || [];
+    res.json(sections);
+  } catch (error) {
+    console.error('Error fetching sections:', error);
+    res.status(500).json({ error: 'Failed to get sections' });
+  }
+};
+
+exports.redirectToPdf = async (req, res) => {
+  try {
+    const { bookId, sectionIndex } = req.params;
+    const docRef = db.collection('books').doc(bookId);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+
+    const bookData = docSnap.data();
+    const sections = bookData.sections || [];
+    const index = parseInt(sectionIndex, 10);
+
+    if (index < 0 || index >= sections.length) {
+      return res.status(404).json({ error: 'Section not found' });
+    }
+
+    const section = sections[index];
+    const page = section.page;
+    let pdfPath = bookData.pdfPath;
+    if (pdfPath && pdfPath.includes('localhost')) {
+      pdfPath = pdfPath.replace('localhost', '10.0.2.2');
+    }
+    res.redirect(`${pdfPath}#page=${page}`);
+  } catch (error) {
+    console.error('Error redirecting to PDF:', error);
+    res.status(500).json({ error: 'Failed to redirect to PDF' });
+  }
+};

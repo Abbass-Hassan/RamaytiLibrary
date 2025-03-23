@@ -1,0 +1,17 @@
+{
+  "sections": "الأقسام",
+  "direct": "الكتب",
+  "search": "بحث",
+  "bookmarks": "المفضلة",
+  "welcome": "مرحبا",
+  "enterSearchText": "أدخل نص البحث...",
+  "searchButton": "بحث",
+  "selectBooks": "اختر الكتب:",
+  "searchResults": "نتائج البحث:",
+  "noResultsFound": "لا توجد نتائج.",
+  "errorTitle": "خطأ",
+  "emptySearchMessage": "أدخل نص البحث واختر كتابًا واحدًا على الأقل.",
+  "page": "الصفحة",
+  "bookmarkAdded": "تمت إضافة المفضلة",
+  "bookmarkRemoved": "تمت إزالة المفضلة"
+}

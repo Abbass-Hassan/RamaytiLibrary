@@ -84,6 +84,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        manifestPlaceholders = [usesCleartextTraffic: "true"]
     }
     signingConfigs {
         debug {
@@ -105,6 +106,13 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+    // Add these configurations
+    packagingOptions {
+        pickFirst 'lib/x86/libc++_shared.so'
+        pickFirst 'lib/x86_64/libc++_shared.so'
+        pickFirst 'lib/arm64-v8a/libc++_shared.so'
+        pickFirst 'lib/armeabi-v7a/libc++_shared.so'
+    }
 }
 
 dependencies {
@@ -116,4 +124,10 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Explicitly add the security-related dependencies
+    implementation "androidx.security:security-crypto:1.1.0-alpha06"
 }
+
+// Add this at the end of the file to properly include vector icons
+apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")

@@ -1,0 +1,17 @@
+{
+  "sections": "Sections",
+  "direct": "Direct",
+  "search": "Search",
+  "bookmarks": "Bookmarks",
+  "welcome": "Welcome",
+  "enterSearchText": "Enter search text...",
+  "searchButton": "Search",
+  "selectBooks": "Select Books:",
+  "searchResults": "Search Results:",
+  "noResultsFound": "No results found.",
+  "errorTitle": "Error",
+  "emptySearchMessage": "Enter search text and select at least one book.",
+  "page": "Page",
+  "bookmarkAdded": "Bookmark added",
+  "bookmarkRemoved": "Bookmark removed"
+}

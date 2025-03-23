@@ -11,37 +11,59 @@ import {
 import Pdf from 'react-native-pdf';
 import RNFetchBlob from 'react-native-blob-util';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { getBookmarks, saveBookmark, removeBookmark } from '../services/bookmarkService';
 
 const DummyPdfScreen = ({ route }) => {
-  const { bookId, sectionIndex } = route.params;
+  // Extract parameters; if bookTitle is not provided, default to empty string.
+  const { bookId, sectionIndex, bookTitle = '' } = route.params;
   
   const [localPdfPath, setLocalPdfPath] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [initialPage, setInitialPage] = useState(1);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [numberOfPages, setNumberOfPages] = useState(1);
-  
+
   // Search-related states
   const [searchText, setSearchText] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-  
+
+  // PDF page states: initialize currentPage with section.page if available, otherwise 1
+  const [numberOfPages, setNumberOfPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Bookmark state
+  const [isBookmarked, setIsBookmarked] = useState(false);
+
+  // Function to check if current page is bookmarked for this book
+  const checkBookmark = async () => {
+    try {
+      const bookmarks = await getBookmarks();
+      const exists = bookmarks.some(
+        (b) => b.bookId === bookId && b.page === currentPage
+      );
+      setIsBookmarked(exists);
+    } catch (error) {
+      console.error('Error checking bookmark:', error);
+    }
+  };
+
+  useEffect(() => {
+    // Re-check bookmark whenever currentPage changes.
+    checkBookmark();
+  }, [currentPage, bookId]);
+
   useEffect(() => {
     const fetchBookAndDownloadPdf = async () => {
       try {
-        const response = await fetch(`http://localhost:3000/api/books/${bookId}`);
+        const response = await fetch(`http://10.0.2.2:3000/api/books/${bookId}`);
         const data = await response.json();
         const pdfUrl = data.pdfPath;
         const sections = data.sections || [];
         const section = sections[sectionIndex];
         if (section && section.page) {
-          setInitialPage(section.page);
           setCurrentPage(section.page);
         }
         const { config, fs } = RNFetchBlob;
         const filePath = fs.dirs.DocumentDir + '/downloaded_' + bookId + '.pdf';
         
-        // Check if the PDF file already exists locally
         const exists = await fs.exists(filePath);
         if (exists) {
           setLocalPdfPath(filePath);
@@ -63,17 +85,18 @@ const DummyPdfScreen = ({ route }) => {
 
     fetchBookAndDownloadPdf();
   }, [bookId, sectionIndex]);
-  
+
+  // Perform search
   const handleSearch = async () => {
     if (!searchText.trim()) return;
     try {
       const response = await fetch(
-        `http://localhost:3000/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(searchText)}`
+        `http://10.0.2.2:3000/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(searchText)}`
       );
       const data = await response.json();
       setSearchResults(data.results || []);
       setCurrentMatchIndex(0);
-      
+
       if (data.results && data.results.length > 0) {
         jumpToMatch(0, data.results);
       }
@@ -83,10 +106,10 @@ const DummyPdfScreen = ({ route }) => {
     }
   };
 
+  // Jump to a specific match index
   const jumpToMatch = (matchIndex, resultsArray = searchResults) => {
     const match = resultsArray[matchIndex];
     if (!match) return;
-    
     if (match.page > numberOfPages) {
       Alert.alert(
         'Page Not Found',
@@ -97,6 +120,7 @@ const DummyPdfScreen = ({ route }) => {
     setCurrentPage(match.page);
   };
 
+  // Go to the previous match
   const handlePrevMatch = () => {
     if (currentMatchIndex <= 0) return;
     const newIndex = currentMatchIndex - 1;
@@ -104,11 +128,41 @@ const DummyPdfScreen = ({ route }) => {
     jumpToMatch(newIndex);
   };
 
+  // Go to the next match
   const handleNextMatch = () => {
     if (currentMatchIndex >= searchResults.length - 1) return;
     const newIndex = currentMatchIndex + 1;
     setCurrentMatchIndex(newIndex);
     jumpToMatch(newIndex);
+  };
+
+  // Toggle bookmark function: if current page is bookmarked, remove it; otherwise, add it.
+  const handleToggleBookmark = async () => {
+    try {
+      const bookmarks = await getBookmarks();
+      const existing = bookmarks.find(
+        (b) => b.bookId === bookId && b.page === currentPage
+      );
+      if (existing) {
+        await removeBookmark(existing.id);
+        setIsBookmarked(false);
+        Alert.alert('Bookmark removed', `Removed bookmark for Page ${currentPage}`);
+      } else {
+        const bookmark = {
+          id: Date.now().toString(),
+          bookId,
+          bookTitle, // include book title from route
+          page: currentPage,
+          note: '',
+        };
+        await saveBookmark(bookmark);
+        setIsBookmarked(true);
+        Alert.alert('Bookmark added', `Book: ${bookTitle}, Page: ${currentPage}`);
+      }
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+      Alert.alert('Error', 'Failed to toggle bookmark.');
+    }
   };
 
   if (loading) {
@@ -126,7 +180,9 @@ const DummyPdfScreen = ({ route }) => {
       </View>
     );
   }
-  
+
+  const currentMatch = searchResults[currentMatchIndex];
+
   return (
     <View style={styles.container}>
       {/* Search Bar */}
@@ -171,7 +227,16 @@ const DummyPdfScreen = ({ route }) => {
           </TouchableOpacity>
         )}
       </View>
-      
+
+      {/* Floating Bookmark Toggle Button */}
+      <TouchableOpacity style={styles.bookmarkButton} onPress={handleToggleBookmark}>
+        <Ionicons
+          name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+          size={24}
+          color="#FFF"
+        />
+      </TouchableOpacity>
+
       {/* PDF Viewer */}
       <Pdf
         source={{ uri: localPdfPath }}
@@ -253,6 +318,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#2196F3',
     borderRadius: 8,
     padding: 8,
+  },
+  bookmarkButton: {
+    position: 'absolute',
+    top: 70,
+    right: 20,
+    backgroundColor: '#2196F3',
+    padding: 10,
+    borderRadius: 30,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 4,
   },
   pdf: {
     flex: 1,

@@ -19,3 +19,14 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+project.ext.react = [
+        nodeExecutableAndArgs: ["/usr/local/bin/node"] // <-- Path from `which node`
+]
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

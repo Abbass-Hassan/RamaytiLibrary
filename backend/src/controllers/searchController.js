@@ -1,92 +1,143 @@
+// backend/src/controllers/searchController.js
+
 const admin = require('../config/firebase');
 const db = admin.firestore();
-const { extractTextFromPdfUrl } = require('../pdfService');
+const { extractTextFromPdfUrlWithPdfJs } = require('../pdfJsService');
+const { normalizeArabicText } = require('../textUtils');
+
+// Escape special regex characters
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Check if query contains Arabic
+function isArabicQuery(q) {
+  return /[\u0600-\u06FF]/.test(q);
+}
 
 exports.searchPdf = async (req, res) => {
-    try {
-      const { bookId, q } = req.query;
-      if (!bookId || !q) {
-        return res.status(400).json({ error: 'Missing bookId or search query' });
+  try {
+    const { bookId, q } = req.query;
+    if (!bookId || !q) {
+      return res.status(400).json({ error: 'Missing bookId or search query' });
+    }
+    
+    // Check if book doc exists
+    const docRef = db.collection('books').doc(bookId);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'Book not found' });
+    }
+    
+    const bookData = docSnap.data();
+    
+    // Extract text with PDF.js
+    const pdfText = await extractTextFromPdfUrlWithPdfJs(bookData.pdfPath);
+    const pages = pdfText.split('\f');
+    console.log('[searchController.js] pages length:', pages.length);
+
+    // Normalize query if Arabic
+    const normalizedQuery = isArabicQuery(q)
+      ? normalizeArabicText(q)
+      : q.normalize('NFKC');
+    
+    let matches = [];
+
+    pages.forEach((pageText, index) => {
+      const pageNumber = index + 1;
+      
+      // Normalize page text if Arabic
+      const normalizedPageText = isArabicQuery(q)
+        ? normalizeArabicText(pageText)
+        : pageText.normalize('NFKC');
+      
+      console.log(`[searchController.js] Page ${pageNumber} snippet:`, normalizedPageText.substring(0, 60));
+      
+      // Build a regex with some context
+      const regex = new RegExp(
+        `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
+        'giu'
+      );
+      
+      let match;
+      let matchCount = 0;
+      while ((match = regex.exec(normalizedPageText)) !== null) {
+        matches.push({
+          snippet: match[0],
+          page: pageNumber
+        });
+        matchCount++;
       }
-      // Retrieve the book document
-      const docRef = db.collection('books').doc(bookId);
-      const docSnap = await docRef.get();
-      if (!docSnap.exists) {
-        return res.status(404).json({ error: 'Book not found' });
+      console.log(`[searchController.js] Found ${matchCount} matches on page ${pageNumber}`);
+    });
+    
+    console.log('[searchController.js] Total matches:', matches.length);
+    res.json({ results: matches });
+  } catch (error) {
+    console.error('Error in searchPdf:', error);
+    res.status(500).json({ error: 'Search failed' });
+  }
+};
+
+exports.searchGlobalMulti = async (req, res) => {
+  try {
+    const { q, bookIds } = req.query;
+    if (!q) {
+      return res.status(400).json({ error: 'Missing search query' });
+    }
+
+    let books = [];
+    if (bookIds) {
+      const ids = bookIds.split(',');
+      for (const id of ids) {
+        const docRef = db.collection('books').doc(id.trim());
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+          books.push({ id: docSnap.id, ...docSnap.data() });
+        }
       }
-      const bookData = docSnap.data();
-      const pdfUrl = bookData.pdfPath;
-      // Extract text from the PDF URL using pdfService
-      const pdfText = await extractTextFromPdfUrl(pdfUrl);
-      // Split the extracted text into pages (assuming \f as page delimiter)
+    } else {
+      const snapshot = await db.collection('books').get();
+      books = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    
+    const normalizedQuery = isArabicQuery(q)
+      ? normalizeArabicText(q)
+      : q.normalize('NFKC');
+
+    let results = [];
+
+    for (const book of books) {
+      const pdfText = await extractTextFromPdfUrlWithPdfJs(book.pdfPath);
       const pages = pdfText.split('\f');
-      let matches = [];
+      console.log(`[searchController.js] For book ${book.id}, pages:`, pages.length);
+
       pages.forEach((pageText, index) => {
         const pageNumber = index + 1;
-        // Create a regex to capture up to 30 characters before and after the query (case-insensitive)
-        const regex = new RegExp(`(.{0,30})(${q})(.{0,30})`, 'gi');
+        const normalizedPageText = isArabicQuery(q)
+          ? normalizeArabicText(pageText)
+          : pageText.normalize('NFKC');
+        
+        const regex = new RegExp(
+          `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
+          'giu'
+        );
+        
         let match;
-        while ((match = regex.exec(pageText)) !== null) {
-          matches.push({
+        while ((match = regex.exec(normalizedPageText)) !== null) {
+          results.push({
+            bookId: book.id,
+            bookTitle: book.title,
             snippet: match[0],
-            page: pageNumber,
+            page: pageNumber
           });
         }
       });
-      res.json({ results: matches });
-    } catch (error) {
-      console.error('Error in searchPdf:', error);
-      res.status(500).json({ error: 'Search failed' });
     }
-  };
 
-exports.searchGlobalMulti = async (req, res) => {
-    try {
-      const { q, bookIds } = req.query;
-      if (!q) {
-        return res.status(400).json({ error: 'Missing search query' });
-      }
-      // If bookIds is provided, split into an array; otherwise, search all books.
-      let books = [];
-      if (bookIds) {
-        const ids = bookIds.split(',');
-        for (const id of ids) {
-          const docRef = db.collection('books').doc(id.trim());
-          const docSnap = await docRef.get();
-          if (docSnap.exists) {
-            books.push({ id: docSnap.id, ...docSnap.data() });
-          }
-        }
-      } else {
-        const snapshot = await db.collection('books').get();
-        books = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }
-      // For each book, extract PDF text and search for q.
-      let results = [];
-      for (const book of books) {
-        const pdfUrl = book.pdfPath;
-        // Extract text from the PDF using your pdfService (make sure it's imported)
-        const pdfText = await require('../pdfService').extractTextFromPdfUrl(pdfUrl);
-        // Split text into pages based on form feed character.
-        const pages = pdfText.split('\f');
-        pages.forEach((pageText, index) => {
-          const pageNumber = index + 1;
-          // Create a regex to capture up to 30 characters before and after the query (case-insensitive)
-          const regex = new RegExp(`(.{0,30})(${q})(.{0,30})`, 'gi');
-          let match;
-          while ((match = regex.exec(pageText)) !== null) {
-            results.push({
-              bookId: book.id,
-              bookTitle: book.title,
-              snippet: match[0],
-              page: pageNumber,
-            });
-          }
-        });
-      }
-      res.json({ results });
-    } catch (error) {
-      console.error('Error in searchGlobalMulti:', error);
-      res.status(500).json({ error: 'Search failed' });
-    }
-  };
+    res.json({ results });
+  } catch (error) {
+    console.error('Error in searchGlobalMulti:', error);
+    res.status(500).json({ error: 'Search failed' });
+  }
+};

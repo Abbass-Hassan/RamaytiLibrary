@@ -10,6 +10,8 @@
 		0C80B921A6F3F58F76C31292 /* libPods-RamaytiLibraryApp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-RamaytiLibraryApp.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		2E3B4E36DDF05FCBF91D9487 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		369BAD7B2D89E27F00264794 /* splash.png in Resources */ = {isa = PBXBuildFile; fileRef = 369BAD7A2D89E27F00264794 /* splash.png */; };
+		369BAD7D2D89F01D00264794 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 369BAD7C2D89F01D00264794 /* Assets.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
@@ -38,6 +40,8 @@
 		368C54992D7DFE80009163D1 /* Octicons.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Octicons.ttf; sourceTree = "<group>"; };
 		368C549A2D7DFE80009163D1 /* SimpleLineIcons.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = SimpleLineIcons.ttf; sourceTree = "<group>"; };
 		368C549B2D7DFE80009163D1 /* Zocial.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Zocial.ttf; sourceTree = "<group>"; };
+		369BAD7A2D89E27F00264794 /* splash.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = splash.png; sourceTree = "<group>"; };
+		369BAD7C2D89F01D00264794 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-RamaytiLibraryApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RamaytiLibraryApp.debug.xcconfig"; path = "Target Support Files/Pods-RamaytiLibraryApp/Pods-RamaytiLibraryApp.debug.xcconfig"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-RamaytiLibraryApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RamaytiLibraryApp.release.xcconfig"; path = "Target Support Files/Pods-RamaytiLibraryApp/Pods-RamaytiLibraryApp.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-RamaytiLibraryApp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-RamaytiLibraryApp.a"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -62,6 +66,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
+				369BAD7A2D89E27F00264794 /* splash.png */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
@@ -123,6 +128,7 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				369BAD7C2D89F01D00264794 /* Assets.xcassets */,
 				368C54882D7DFD8F009163D1 /* Resources */,
 				13B07FAE1A68108700A75B9A /* RamaytiLibraryApp */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
@@ -211,9 +217,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				369BAD7B2D89E27F00264794 /* splash.png in Resources */,
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				2E3B4E36DDF05FCBF91D9487 /* PrivacyInfo.xcprivacy in Resources */,
+				369BAD7D2D89F01D00264794 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -294,6 +302,7 @@
 			baseConfigurationReference = 3B4392A12AC88292D35C810B /* Pods-RamaytiLibraryApp.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
@@ -322,6 +331,7 @@
 			baseConfigurationReference = 5709B34CF0A7D63546082F79 /* Pods-RamaytiLibraryApp.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = RamaytiLibraryApp/Info.plist;

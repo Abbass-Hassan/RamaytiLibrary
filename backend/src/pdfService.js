@@ -6,9 +6,19 @@ const extractTextFromPdfUrl = async (pdfUrl) => {
     // Download the PDF as a buffer
     const response = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
     const dataBuffer = response.data;
-    // Use pdf-parse to extract text from the buffer
-    const data = await pdfParse(dataBuffer);
-    return data.text; // returns the extracted text
+
+    // Pass a custom pagerender function to pdf-parse
+    const options = {
+      pagerender: async (pageData) => {
+        const textContent = await pageData.getTextContent();
+        const pageText = textContent.items.map((item) => item.str).join(' ');
+        return pageText + '\f';
+      },
+    };
+
+    // Use pdf-parse with our custom options
+    const data = await pdfParse(dataBuffer, options);
+    return data.text;
   } catch (error) {
     console.error('Error extracting PDF text:', error);
     throw error;

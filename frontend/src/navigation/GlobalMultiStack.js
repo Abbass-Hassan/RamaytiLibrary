@@ -7,20 +7,14 @@ const Stack = createStackNavigator();
 
 const GlobalMultiStack = () => {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen
         name="GlobalMultiSearchScreen"
         component={GlobalMultiSearchScreen}
-        options={{ title: 'Global Search' }}
       />
-      {/* 
-        We include DirectPdfScreen so we can navigate to it from results.
-        If you also want DummyPdfScreen or others, add them as needed.
-      */}
       <Stack.Screen
         name="DirectPdfScreen"
         component={DirectPdfScreen}
-        options={{ title: 'PDF Viewer' }}
       />
     </Stack.Navigator>
   );
