@@ -39,7 +39,7 @@ const DirectPdfScreen = ({ route }) => {
   useEffect(() => {
     const fetchBook = async () => {
       try {
-        const response = await fetch(`http://10.0.2.2:3000/api/books/${bookId}`);
+        const response = await fetch(`http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`);
         const data = await response.json();
         setPdfUrl(data.pdfPath);
         setLoading(false);
@@ -74,7 +74,7 @@ const DirectPdfScreen = ({ route }) => {
     if (!searchText.trim()) return;
     try {
       const response = await fetch(
-        `http://10.0.2.2:3000/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(searchText)}`
+        `http://ramaytilibrary-production.up.railway.app/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(searchText)}`
       );
       const data = await response.json();
       const results = data.results || [];

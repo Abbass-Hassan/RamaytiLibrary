@@ -53,7 +53,7 @@ const DummyPdfScreen = ({ route }) => {
   useEffect(() => {
     const fetchBookAndDownloadPdf = async () => {
       try {
-        const response = await fetch(`http://10.0.2.2:3000/api/books/${bookId}`);
+        const response = await fetch(`http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`);
         const data = await response.json();
         const pdfUrl = data.pdfPath;
         const sections = data.sections || [];
@@ -91,7 +91,7 @@ const DummyPdfScreen = ({ route }) => {
     if (!searchText.trim()) return;
     try {
       const response = await fetch(
-        `http://10.0.2.2:3000/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(searchText)}`
+        `http://ramaytilibrary-production.up.railway.app/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(searchText)}`
       );
       const data = await response.json();
       setSearchResults(data.results || []);

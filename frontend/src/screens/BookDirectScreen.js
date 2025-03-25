@@ -20,7 +20,7 @@ const BookDirectScreen = () => {
 
   const fetchBooks = async () => {
     try {
-      const response = await fetch('http://10.0.2.2:3000/api/books');
+      const response = await fetch('https://ramaytilibrary-production.up.railway.app/api/books');
       const data = await response.json();
       setBooks(data);
       setLoading(false);
@@ -44,9 +44,8 @@ const BookDirectScreen = () => {
   const renderItem = ({ item }) => (
     <TouchableOpacity onPress={() => handleBookPress(item)} style={styles.card}>
       <View style={styles.previewContainer}>
-        {/* Use a cover image instead of the placeholder */}
         <Image
-          source={require('../assets/book-cover.png')} // Replace with your actual image path
+          source={require('../assets/book-cover.png')}
           style={styles.coverImage}
           resizeMode="cover"
         />
@@ -82,7 +81,6 @@ const BookDirectScreen = () => {
 
 export default BookDirectScreen;
 
-// 3) Updated styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,

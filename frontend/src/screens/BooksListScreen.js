@@ -7,7 +7,7 @@ const BooksListScreen = ({ navigation }) => {
 
   const fetchBooks = async () => {
     try {
-      const response = await fetch('http://10.0.2.2:3000/api/books');
+      const response = await fetch('http://ramaytilibrary-production.up.railway.app/api/books');
       const data = await response.json();
       setBooks(data);
     } catch (error) {

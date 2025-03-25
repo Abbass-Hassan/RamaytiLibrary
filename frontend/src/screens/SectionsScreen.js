@@ -10,7 +10,7 @@ const SectionsScreen = ({ route, navigation }) => {
 
   const fetchSections = async () => {
     try {
-      const response = await fetch(`http://10.0.2.2:3000/api/books/${bookId}/sections`);
+      const response = await fetch(`http://ramaytilibrary-production.up.railway.app/api/books/${bookId}/sections`);
       const data = await response.json();
       setSections(data);
     } catch (error) {

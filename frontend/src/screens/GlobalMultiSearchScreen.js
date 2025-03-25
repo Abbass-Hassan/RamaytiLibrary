@@ -34,7 +34,7 @@ const GlobalMultiSearchScreen = () => {
   useEffect(() => {
     const fetchBooks = async () => {
       try {
-        const response = await fetch('http://10.0.2.2:3000/api/books');
+        const response = await fetch('http://ramaytilibrary-production.up.railway.app/api/books');
         const data = await response.json();
         const booksWithSelection = data.map((book) => ({
           ...book,
@@ -71,7 +71,7 @@ const GlobalMultiSearchScreen = () => {
     try {
       const bookIdsParam = selectedBooks.join(',');
       const response = await fetch(
-        `http://10.0.2.2:3000/api/search/global-multi?q=${encodeURIComponent(
+        `http://ramaytilibrary-production.up.railway.app/api/search/global-multi?q=${encodeURIComponent(
           searchText
         )}&bookIds=${bookIdsParam}`
       );

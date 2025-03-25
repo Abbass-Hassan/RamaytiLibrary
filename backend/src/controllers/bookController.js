@@ -7,7 +7,7 @@ exports.getAllBooks = async (req, res) => {
     const books = snapshot.docs.map(doc => {
       const data = doc.data();
       if (data.pdfPath && data.pdfPath.includes('localhost')) {
-        data.pdfPath = data.pdfPath.replace('localhost', '10.0.2.2');
+        data.pdfPath = data.pdfPath.replace('localhost', 'ramaytilibrary-production.up.railway.app');
       }
       return { id: doc.id, ...data };
     });
@@ -30,7 +30,7 @@ exports.getBookById = async (req, res) => {
 
     const data = docSnap.data();
     if (data.pdfPath && data.pdfPath.includes('localhost')) {
-      data.pdfPath = data.pdfPath.replace('localhost', '10.0.2.2');
+      data.pdfPath = data.pdfPath.replace('localhost', 'ramaytilibrary-production.up.railway.app');
     }
     res.json({ id: docSnap.id, ...data });
   } catch (error) {
@@ -80,7 +80,7 @@ exports.redirectToPdf = async (req, res) => {
     const page = section.page;
     let pdfPath = bookData.pdfPath;
     if (pdfPath && pdfPath.includes('localhost')) {
-      pdfPath = pdfPath.replace('localhost', '10.0.2.2');
+      pdfPath = pdfPath.replace('localhost', 'ramaytilibrary-production.up.railway.app');
     }
     res.redirect(`${pdfPath}#page=${page}`);
   } catch (error) {

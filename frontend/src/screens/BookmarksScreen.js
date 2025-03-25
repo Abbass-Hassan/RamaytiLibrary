@@ -67,7 +67,7 @@ const BookmarksScreen = () => {
       const updated = [];
       for (const b of data) {
         try {
-          const res = await fetch(`http://10.0.2.2:3000/api/books/${b.bookId}`);
+          const res = await fetch(`http://ramaytilibrary-production.up.railway.app/api/books/${b.bookId}`);
           const bookData = await res.json();
           const localPath = await getLocalPdfPath(b.bookId, bookData.pdfPath);
           updated.push({
