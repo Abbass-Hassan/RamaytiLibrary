@@ -1,6 +1,6 @@
 const admin = require("../config/firebase");
 const db = admin.firestore();
-const { extractTextFromPdfUrl } = require("../pdfParseService");
+const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
 
 exports.getAllBooks = async (req, res) => {
   try {
@@ -130,7 +130,7 @@ exports.getBookContent = async (req, res) => {
     // Extract text content from the PDF
     try {
       console.log(`Starting PDF text extraction...`);
-      const textContent = await extractTextFromPdfUrl(pdfPath);
+      const textContent = await extractTextFromPdfUrlWithPdfJs(pdfPath);
       console.log(`Text extraction complete, processing pages...`);
 
       // Split text by form feed character to get pages
@@ -148,19 +148,15 @@ exports.getBookContent = async (req, res) => {
     } catch (pdfError) {
       console.error("PDF processing error:", pdfError);
 
-      // Fallback with mock content
-      console.log("Using fallback content generation");
-
-      // Create a simple mock content as fallback
+      // Fallback: provide minimal content when extraction fails
       const fallbackPages = [];
-      const pageCount = 10; // Mock 10 pages
+      const pageCount = 10; // Create 10 placeholder pages
 
       for (let i = 1; i <= pageCount; i++) {
         fallbackPages.push(
-          `This is a preview of ${bookData.title} - Page ${i}.\n\n` +
-            `The PDF content could not be extracted due to an error.\n\n` +
-            `Please use the Standard PDF Reader to view the complete content.\n\n` +
-            `Error details: ${pdfError.message}`
+          `This is page ${i} of ${bookData.title}.\n\n` +
+            `PDF text extraction failed. Please use the Standard PDF viewer.\n\n` +
+            `Error: ${pdfError.message}`
         );
       }
 
@@ -170,7 +166,6 @@ exports.getBookContent = async (req, res) => {
         totalPages: pageCount,
         content: fallbackPages,
         isPreview: true,
-        error: pdfError.message,
       });
     }
   } catch (error) {
