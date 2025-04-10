@@ -26,7 +26,7 @@ export default function App() {
   return (
     <I18nextProvider i18n={i18n}>
       <NavigationContainer theme={navTheme}>
-        <StatusBar backgroundColor={colors.background} barStyle="light-content" />
+        <StatusBar backgroundColor={colors.primary} barStyle="light-content" translucent={false} />
         <RootStack.Navigator screenOptions={{ headerShown: false }}>
           <RootStack.Screen name="MainTabs" component={MainTabs} />
         </RootStack.Navigator>

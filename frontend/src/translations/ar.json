@@ -13,5 +13,14 @@
   "emptySearchMessage": "أدخل نص البحث واختر كتابًا واحدًا على الأقل.",
   "page": "الصفحة",
   "bookmarkAdded": "تمت إضافة المفضلة",
-  "bookmarkRemoved": "تمت إزالة المفضلة"
+  "bookmarkRemoved": "تمت إزالة المفضلة",
+  "loadingBook": "جاري تحميل الكتاب",
+  "selectAll": "تحديد الكل",
+  "deselectAll": "إلغاء تحديد الكل",
+  "resultsCount": "({count})",
+  "selectedCount": "({selected}/{total})",
+  "searching": "جاري البحث",
+  "filterBooks": "تصفية الكتب...",
+  "noBooksFound": "لا توجد كتب مطابقة",
+  "booksSelected": "كتب مختارة"
 }

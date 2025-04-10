@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  SectionList,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -58,7 +59,29 @@ const BookmarksScreen = () => {
   const { t } = useTranslation();
 
   const [bookmarks, setBookmarks] = useState([]);
+  const [groupedBookmarks, setGroupedBookmarks] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Group bookmarks by book
+  const groupBookmarksByBook = (bookmarkList) => {
+    const grouped = {};
+    
+    // Group bookmarks by bookId
+    bookmarkList.forEach(bookmark => {
+      if (!grouped[bookmark.bookId]) {
+        grouped[bookmark.bookId] = {
+          title: bookmark.bookTitle,
+          data: []
+        };
+      }
+      grouped[bookmark.bookId].data.push(bookmark);
+    });
+    
+    // Convert to array format needed for SectionList
+    return Object.values(grouped).sort((a, b) => 
+      a.title.localeCompare(b.title)
+    );
+  };
 
   const loadBookmarks = async () => {
     try {
@@ -80,6 +103,7 @@ const BookmarksScreen = () => {
         }
       }
       setBookmarks(updated);
+      setGroupedBookmarks(groupBookmarksByBook(updated));
     } catch (error) {
       console.error('Error loading bookmarks:', error);
       Alert.alert('Error', 'Failed to load bookmarks.');
@@ -115,43 +139,56 @@ const BookmarksScreen = () => {
     });
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <TouchableOpacity
-        style={styles.previewWrapper}
-        onPress={() => handleBookmarkPress(item)}
-      >
-        <View style={styles.previewContainer}>
-          {item.pdfLocalPath ? (
-            <Pdf
-              key={item.pdfLocalPath + '_' + item.page}
-              source={{ uri: item.pdfLocalPath, cache: false }}
-              trustAllCerts={true}
-              page={item.page}
-              scale={1.0}
-              horizontal={false}
-              fitPolicy={0}
-              style={styles.pdfPreview}
-              onError={(error) => {
-                console.log('Error loading PDF preview:', error);
-              }}
-            />
-          ) : (
-            <Text>Loading preview...</Text>
-          )}
-        </View>
-        <Text style={styles.title} numberOfLines={2}>
-          {item.bookTitle} - {t('page')} {item.page}
-        </Text>
-      </TouchableOpacity>
+  const renderSectionHeader = ({ section }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderText}>{section.title}</Text>
+    </View>
+  );
 
+  const renderBookmarkItem = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.bookmarkItem}
+      onPress={() => handleBookmarkPress(item)}
+    >
+      <View style={styles.previewContainer}>
+        {item.pdfLocalPath ? (
+          <Pdf
+            key={item.pdfLocalPath + '_' + item.page}
+            source={{ uri: item.pdfLocalPath, cache: false }}
+            trustAllCerts={true}
+            page={item.page}
+            scale={1.0}
+            horizontal={false}
+            fitPolicy={0}
+            style={styles.pdfPreview}
+            onError={(error) => {
+              console.log('Error loading PDF preview:', error);
+            }}
+          />
+        ) : (
+          <View style={styles.previewPlaceholder}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        )}
+      </View>
+      
+      <View style={styles.bookmarkDetails}>
+        <Text style={styles.pageText}>{t('page')} {item.page}</Text>
+        {item.note && item.note.trim() !== '' && (
+          <Text style={styles.noteText} numberOfLines={2}>
+            {item.note}
+          </Text>
+        )}
+      </View>
+      
       <TouchableOpacity
         onPress={() => handleRemoveBookmark(item.id)}
-        style={styles.removeIcon}
+        style={styles.removeButton}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="trash-outline" size={24} color={colors.danger} />
+        <Ionicons name="trash-outline" size={20} color={colors.danger} />
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -165,21 +202,20 @@ const BookmarksScreen = () => {
   if (bookmarks.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No bookmarks found.</Text>
+        <Text style={styles.emptyText}>{t('noBookmarksFound')}</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <FlatList
-        key="twoColumns"
-        data={bookmarks}
+      <SectionList
+        sections={groupedBookmarks}
         keyExtractor={(item) => item.id}
+        renderItem={renderBookmarkItem}
+        renderSectionHeader={renderSectionHeader}
+        stickySectionHeadersEnabled={true}
         contentContainerStyle={styles.listContainer}
-        renderItem={renderItem}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
       />
     </View>
   );
@@ -191,14 +227,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 50,
   },
   listContainer: {
     paddingBottom: 20,
-  },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
   },
   loadingContainer: {
     flex: 1,
@@ -214,41 +245,78 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
   },
-  card: {
-    flex: 1,
-    maxWidth: '48%',
+  sectionHeader: {
+    backgroundColor: colors.background,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    marginTop: 8,
+  },
+  sectionHeaderText: {
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: 18,
+    textAlign: 'right',
+  },
+  bookmarkItem: {
+    flexDirection: 'row',
     backgroundColor: colors.card,
-    marginVertical: 6,
-    borderRadius: 8,
-    padding: 8,
-    elevation: 3,
+    marginVertical: 4,
+    marginHorizontal: 12,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    alignItems: 'center',
-  },
-  previewWrapper: {
-    width: '100%',
-    alignItems: 'center',
+    elevation: 2,
   },
   previewContainer: {
-    width: 100,
-    height: 140,
-    marginBottom: 8,
+    width: 70,
+    height: 100,
+    marginRight: 12,
+    borderRadius: 6,
     overflow: 'hidden',
+    backgroundColor: '#f8f8f8',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   pdfPreview: {
     width: '100%',
     height: '100%',
   },
-  title: {
-    fontSize: 14,
-    color: colors.text,
+  previewPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+  },
+  bookmarkDetails: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 6,
+  },
+  pageText: {
+    fontSize: 17,
     fontWeight: '500',
-    textAlign: 'center',
+    color: colors.text,
+    marginBottom: 6,
   },
-  removeIcon: {
-    marginTop: 8,
+  noteText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'right',
+    lineHeight: 20,
   },
+  removeButton: {
+    padding: 8,
+    alignSelf: 'center',
+    marginLeft: 6,
+  }
 });

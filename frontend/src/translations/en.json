@@ -13,5 +13,7 @@
   "emptySearchMessage": "Enter search text and select at least one book.",
   "page": "Page",
   "bookmarkAdded": "Bookmark added",
-  "bookmarkRemoved": "Bookmark removed"
+  "bookmarkRemoved": "Bookmark removed",
+  "loadingBook": "Loading book",
+  "searching": "Searching"
 }

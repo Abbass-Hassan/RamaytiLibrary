@@ -4,8 +4,7 @@
         <!-- No changes needed here -->
     </style>
 
-    <!-- Simple splash theme just for showing the image -->
-    <style name="SplashTheme" parent="AppTheme">
-        <item name="android:windowBackground">@drawable/splash_background</item>
-    </style>
+<style name="SplashTheme" parent="AppTheme">
+    <item name="android:windowBackground">@android:color/transparent</item>
+</style>
 </resources>
