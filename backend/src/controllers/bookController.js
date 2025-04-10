@@ -102,16 +102,19 @@ exports.redirectToPdf = async (req, res) => {
 exports.getBookContent = async (req, res) => {
   try {
     const { bookId } = req.params;
+    console.log(`Getting content for book ID: ${bookId}`);
 
     // Get the book from Firestore
     const docRef = db.collection("books").doc(bookId);
     const docSnap = await docRef.get();
 
     if (!docSnap.exists) {
+      console.log(`Book not found: ${bookId}`);
       return res.status(404).json({ error: "Book not found" });
     }
 
     const bookData = docSnap.data();
+    console.log(`Found book: ${bookData.title}`);
 
     // Format the PDF path
     let pdfPath = bookData.pdfPath;
@@ -122,18 +125,42 @@ exports.getBookContent = async (req, res) => {
       );
     }
 
+    console.log(`PDF path: ${pdfPath}`);
+
     // Extract text content from the PDF
-    const textContent = await extractTextFromPdfUrlWithPdfJs(pdfPath);
+    try {
+      console.log(`Starting PDF text extraction...`);
+      const textContent = await extractTextFromPdfUrlWithPdfJs(pdfPath);
+      console.log(`Text extraction complete, processing pages...`);
 
-    // Split text by form feed character to get pages
-    const pages = textContent.split("\f").filter((page) => page.trim() !== "");
+      // Split text by form feed character to get pages
+      const pages = textContent
+        .split("\f")
+        .filter((page) => page.trim() !== "");
+      console.log(`Extracted ${pages.length} pages of content`);
 
-    res.json({
-      bookId: docSnap.id,
-      title: bookData.title,
-      totalPages: pages.length,
-      content: pages,
-    });
+      res.json({
+        bookId: docSnap.id,
+        title: bookData.title,
+        totalPages: pages.length,
+        content: pages,
+      });
+    } catch (pdfError) {
+      console.error("PDF processing error:", pdfError);
+
+      // Return a simplified response as fallback
+      res.status(500).json({
+        message: "Failed to extract PDF content",
+        error: pdfError.message,
+        bookId: docSnap.id,
+        title: bookData.title,
+        // Provide at least some content to test the UI
+        totalPages: 1,
+        content: [
+          `The PDF content could not be extracted. Error: ${pdfError.message}`,
+        ],
+      });
+    }
   } catch (error) {
     console.error("Error getting book content:", error);
     res
