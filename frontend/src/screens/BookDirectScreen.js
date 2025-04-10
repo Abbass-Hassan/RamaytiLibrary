@@ -1,60 +1,56 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
-  FlatList,
   Text,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
   StyleSheet,
-  Image,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import colors from "../config/colors";
 
-// 1) Import color palette
-import colors from '../config/colors';
-
-const BookDirectScreen = () => {
+const BookDirectScreen = ({ route }) => {
+  const { bookId, bookTitle } = route.params || {};
   const navigation = useNavigation();
-  const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const fetchBooks = async () => {
-    try {
-      const response = await fetch('https://ramaytilibrary-production.up.railway.app/api/books');
-      const data = await response.json();
-      setBooks(data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching books:', error);
-      setLoading(false);
-    }
-  };
+  const [bookInfo, setBookInfo] = useState(null);
 
   useEffect(() => {
-    fetchBooks();
-  }, []);
+    const fetchBookInfo = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch(
+          `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`
+        );
+        const data = await response.json();
+        setBookInfo(data);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching book info:", error);
+        Alert.alert("Error", "Failed to load book information.");
+        setLoading(false);
+      }
+    };
 
-  const handleBookPress = (book) => {
-    navigation.navigate('DirectPdfScreen', {
-      bookId: book.id,
-      bookTitle: book.title,
+    fetchBookInfo();
+  }, [bookId]);
+
+  const openCustomReader = () => {
+    navigation.navigate("CustomPdfReader", {
+      bookId,
+      bookTitle,
+      page: 1,
     });
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity onPress={() => handleBookPress(item)} style={styles.card}>
-      <View style={styles.previewContainer}>
-        <Image
-          source={require('../assets/book-cover.png')}
-          style={styles.coverImage}
-          resizeMode="cover"
-        />
-      </View>
-      <Text style={styles.title} numberOfLines={2}>
-        {item.title}
-      </Text>
-    </TouchableOpacity>
-  );
+  const openStandardPdfViewer = () => {
+    navigation.navigate("DirectPdf", {
+      bookId,
+      bookTitle,
+      page: 1,
+    });
+  };
 
   if (loading) {
     return (
@@ -64,71 +60,113 @@ const BookDirectScreen = () => {
     );
   }
 
+  if (!bookInfo) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Book information not available.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <FlatList
-        key="twoColumns"
-        data={books}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        renderItem={renderItem}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
-      />
+      <Text style={styles.title}>{bookTitle || bookInfo.title}</Text>
+
+      {bookInfo.description && (
+        <Text style={styles.description}>{bookInfo.description}</Text>
+      )}
+
+      <View style={styles.readerOptions}>
+        <Text style={styles.optionsTitle}>Reading Options</Text>
+
+        <TouchableOpacity
+          style={styles.optionButton}
+          onPress={openCustomReader}
+        >
+          <Text style={styles.optionButtonText}>Open Enhanced Reader</Text>
+          <Text style={styles.optionDescription}>
+            Customizable text with font size and color options
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.optionButton, styles.secondaryButton]}
+          onPress={openStandardPdfViewer}
+        >
+          <Text style={styles.optionButtonText}>Open Standard PDF</Text>
+          <Text style={styles.optionDescription}>
+            Standard PDF viewer for original document formatting
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
-export default BookDirectScreen;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-    paddingTop: 50,
-  },
-  listContainer: {
-    paddingBottom: 20,
-  },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    padding: 20,
+    backgroundColor: colors.background || "#F5F5F5",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  card: {
-    flex: 1,
-    maxWidth: '48%',
-    backgroundColor: colors.card,
-    marginVertical: 6,
-    borderRadius: 8,
-    padding: 8,
-    elevation: 3, // Android shadow
-    shadowColor: colors.shadow, // iOS shadow
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    alignItems: 'center',
-  },
-  previewContainer: {
-    width: 100,
-    height: 140,
-    marginBottom: 8,
-    overflow: 'hidden',
-    borderRadius: 4,
-  },
-  coverImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 4,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background || "#F5F5F5",
   },
   title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: colors.text || "#333",
+    marginBottom: 15,
+  },
+  description: {
+    fontSize: 16,
+    color: colors.text || "#333",
+    marginBottom: 30,
+    lineHeight: 22,
+  },
+  readerOptions: {
+    backgroundColor: colors.card || "#FFF",
+    borderRadius: 10,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  optionsTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: colors.text || "#333",
+    marginBottom: 15,
+  },
+  optionButton: {
+    backgroundColor: colors.primary || "#2196F3",
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  secondaryButton: {
+    backgroundColor: colors.secondary || "#757575",
+  },
+  optionButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  optionDescription: {
+    color: "rgba(255,255,255,0.8)",
     fontSize: 14,
-    color: colors.text,
-    fontWeight: '500',
-    textAlign: 'center',
   },
 });
+
+export default BookDirectScreen;

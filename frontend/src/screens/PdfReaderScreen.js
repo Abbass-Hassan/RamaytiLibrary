@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   ActivityIndicator,
@@ -7,14 +7,18 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-} from 'react-native';
-import Pdf from 'react-native-pdf';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getBookmarks, saveBookmark, removeBookmark } from '../services/bookmarkService';
+} from "react-native";
+import Pdf from "react-native-pdf";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import {
+  getBookmarks,
+  saveBookmark,
+  removeBookmark,
+} from "../services/bookmarkService";
 
 // Import your colors and any highlight component if needed
-import colors from '../config/colors';
-import HighlightedText from './HighlightedText';
+import colors from "../config/colors";
+import HighlightedText from "./HighlightedText";
 
 const DirectPdfScreen = ({ route }) => {
   // Expecting bookId, bookTitle, and optional initial page
@@ -32,7 +36,7 @@ const DirectPdfScreen = ({ route }) => {
   const [isBookmarked, setIsBookmarked] = useState(false);
 
   // Search states
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
@@ -40,13 +44,15 @@ const DirectPdfScreen = ({ route }) => {
   useEffect(() => {
     const fetchBook = async () => {
       try {
-        const response = await fetch(`http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`);
+        const response = await fetch(
+          `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`
+        );
         const data = await response.json();
         setPdfUrl(data.pdfPath);
         setLoading(false);
       } catch (error) {
-        console.error('Error fetching PDF info:', error);
-        Alert.alert('Error', 'Failed to load PDF info.');
+        console.error("Error fetching PDF info:", error);
+        Alert.alert("Error", "Failed to load PDF info.");
         setLoading(false);
       }
     };
@@ -62,7 +68,7 @@ const DirectPdfScreen = ({ route }) => {
       );
       setIsBookmarked(exists);
     } catch (error) {
-      console.error('Error checking bookmark:', error);
+      console.error("Error checking bookmark:", error);
     }
   };
 
@@ -75,7 +81,9 @@ const DirectPdfScreen = ({ route }) => {
     if (!searchText.trim()) return;
     try {
       const response = await fetch(
-        `http://ramaytilibrary-production.up.railway.app/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(searchText)}`
+        `http://ramaytilibrary-production.up.railway.app/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(
+          searchText
+        )}`
       );
       const data = await response.json();
       setSearchResults(data.results || []);
@@ -85,8 +93,8 @@ const DirectPdfScreen = ({ route }) => {
         jumpToMatch(0, data.results);
       }
     } catch (error) {
-      console.error('Error searching PDF:', error);
-      Alert.alert('Error', 'Failed to search in PDF.');
+      console.error("Error searching PDF:", error);
+      Alert.alert("Error", "Failed to search in PDF.");
     }
   };
 
@@ -95,7 +103,7 @@ const DirectPdfScreen = ({ route }) => {
     if (!match) return;
     if (match.page > numberOfPages) {
       Alert.alert(
-        'Page Not Found',
+        "Page Not Found",
         `The PDF has only ${numberOfPages} pages, but the search suggests page ${match.page}.`
       );
       return;
@@ -127,22 +135,28 @@ const DirectPdfScreen = ({ route }) => {
       if (existing) {
         await removeBookmark(existing.id);
         setIsBookmarked(false);
-        Alert.alert('Bookmark removed', `Removed bookmark for Page ${currentPage}`);
+        Alert.alert(
+          "Bookmark removed",
+          `Removed bookmark for Page ${currentPage}`
+        );
       } else {
         const bookmark = {
           id: Date.now().toString(),
           bookId,
-          bookTitle: bookTitle || '',
+          bookTitle: bookTitle || "",
           page: currentPage,
-          note: '',
+          note: "",
         };
         await saveBookmark(bookmark);
         setIsBookmarked(true);
-        Alert.alert('Bookmark added', `Book: ${bookTitle}, Page: ${currentPage}`);
+        Alert.alert(
+          "Bookmark added",
+          `Book: ${bookTitle}, Page: ${currentPage}`
+        );
       }
     } catch (error) {
-      console.error('Error toggling bookmark:', error);
-      Alert.alert('Error', 'Failed to toggle bookmark.');
+      console.error("Error toggling bookmark:", error);
+      Alert.alert("Error", "Failed to toggle bookmark.");
     }
   };
 
@@ -173,7 +187,7 @@ const DirectPdfScreen = ({ route }) => {
         <TextInput
           style={styles.searchInput}
           placeholder="Search in PDF"
-          placeholderTextColor={colors.textSecondary || '#999'}
+          placeholderTextColor={colors.textSecondary || "#999"}
           value={searchText}
           onChangeText={setSearchText}
           onSubmitEditing={handleSearch}
@@ -198,7 +212,8 @@ const DirectPdfScreen = ({ route }) => {
               disabled={currentMatchIndex === searchResults.length - 1}
               style={[
                 styles.arrowButton,
-                currentMatchIndex === searchResults.length - 1 && styles.arrowDisabled,
+                currentMatchIndex === searchResults.length - 1 &&
+                  styles.arrowDisabled,
               ]}
             >
               <Ionicons name="chevron-down" size={18} color="#FFF" />
@@ -212,9 +227,12 @@ const DirectPdfScreen = ({ route }) => {
       </View>
 
       {/* Floating Bookmark Toggle Button */}
-      <TouchableOpacity style={styles.bookmarkButton} onPress={handleToggleBookmark}>
+      <TouchableOpacity
+        style={styles.bookmarkButton}
+        onPress={handleToggleBookmark}
+      >
         <Ionicons
-          name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+          name={isBookmarked ? "bookmark" : "bookmark-outline"}
           size={24}
           color="#FFF"
         />
@@ -231,7 +249,7 @@ const DirectPdfScreen = ({ route }) => {
           setCurrentPage(newPage);
         }}
         onError={(error) => {
-          console.log('PDF Error:', error);
+          console.log("PDF Error:", error);
         }}
         style={styles.pdf}
       />
@@ -251,42 +269,42 @@ export default DirectPdfScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background || '#fff',
+    backgroundColor: colors.background || "#fff",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   searchBarContainer: {
-    flexDirection: 'row',
-    backgroundColor: colors.background || '#F5F5F5',
+    flexDirection: "row",
+    backgroundColor: colors.background || "#F5F5F5",
     paddingHorizontal: 10,
     paddingVertical: 8,
-    alignItems: 'center',
+    alignItems: "center",
     elevation: 2,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: colors.card || '#FFF',
+    backgroundColor: colors.card || "#FFF",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#CCC',
+    borderColor: "#CCC",
     paddingHorizontal: 10,
     paddingVertical: 6,
-    color: colors.text || '#333',
+    color: colors.text || "#333",
   },
   arrowsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginLeft: 8,
-    backgroundColor: colors.primary || '#2196F3',
+    backgroundColor: colors.primary || "#2196F3",
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   matchCount: {
-    color: '#FFF',
+    color: "#FFF",
     marginRight: 8,
     fontSize: 14,
   },
@@ -295,22 +313,22 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     marginHorizontal: 2,
-    backgroundColor: colors.primary || '#2196F3',
+    backgroundColor: colors.primary || "#2196F3",
   },
   arrowDisabled: {
-    backgroundColor: '#999',
+    backgroundColor: "#999",
   },
   searchButton: {
     marginLeft: 8,
-    backgroundColor: colors.primary || '#2196F3',
+    backgroundColor: colors.primary || "#2196F3",
     borderRadius: 8,
     padding: 8,
   },
   bookmarkButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 70,
     right: 20,
-    backgroundColor: colors.primary || '#2196F3',
+    backgroundColor: colors.primary || "#2196F3",
     padding: 10,
     borderRadius: 30,
     zIndex: 10,
@@ -320,13 +338,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   snippetOverlay: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: "rgba(255,255,255,0.9)",
     padding: 10,
     borderTopWidth: 1,
-    borderTopColor: '#ccc',
+    borderTopColor: "#ccc",
   },
 });

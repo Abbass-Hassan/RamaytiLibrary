@@ -1,19 +1,28 @@
-import React from 'react';
-import { Text } from 'react-native';
+import React from "react";
+import { Text, View } from "react-native";
 
-const HighlightedText = ({ text, highlight }) => {
-  if (!highlight) return <Text>{text}</Text>;
-  
+const HighlightedText = ({
+  text,
+  highlight,
+  textStyle = {},
+  highlightStyle = { backgroundColor: "yellow" },
+}) => {
+  if (!highlight || !text) return <Text style={textStyle}>{text}</Text>;
+
+  // Escape special regex characters in the search term
+  const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
   // Create a regex to match the highlight term (case-insensitive)
-  const regex = new RegExp(`(${highlight})`, 'gi');
+  const regex = new RegExp(`(${escapedHighlight})`, "gi");
+
   // Split the text into parts based on the regex matches
   const parts = text.split(regex);
 
   return (
-    <Text>
+    <Text style={textStyle}>
       {parts.map((part, index) =>
         regex.test(part) ? (
-          <Text key={index} style={{ backgroundColor: 'yellow' }}>
+          <Text key={index} style={[textStyle, highlightStyle]}>
             {part}
           </Text>
         ) : (
