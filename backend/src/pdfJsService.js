@@ -1,20 +1,9 @@
 const axios = require("axios");
-// IMPORTANT: Use the legacy CommonJS build:
-const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
-const path = require("path");
+const pdfjsLib = require("pdfjs-dist/legacy/build/pdf");
+const pdfjsWorker = require("pdfjs-dist/legacy/build/pdf.worker");
 
-// Properly configure PDF.js for Node.js environment
-// The key change is to explicitly set the worker source as a string
-pdfjsLib.GlobalWorkerOptions.workerSrc = ""; // Empty string to use fake worker
-
-// Disable font face to improve performance
-pdfjsLib.GlobalWorkerOptions.disableFontFace = true;
-
-// Configure the standard font data URL
-const STANDARD_FONT_DATA_URL = path.join(
-  __dirname,
-  "../node_modules/pdfjs-dist/standard_fonts/"
-);
+// This simple configuration works in Node.js environments
+pdfjsLib.GlobalWorkerOptions.workerPort = pdfjsWorker;
 
 async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
   try {
@@ -25,18 +14,11 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
     const data = new Uint8Array(response.data);
     console.log(`Downloaded PDF: ${data.length} bytes`);
 
-    // 2. Load the PDF document with proper worker configuration
+    // 2. Load the PDF document with simplified configuration
     const loadingTask = pdfjsLib.getDocument({
       data,
-      useWorkerFetch: false,
-      isEvalSupported: false,
       disableFontFace: true,
-      nativeImageDecoderSupport: "none",
       ignoreErrors: true,
-      // Use a string for the worker ID
-      rangeChunkSize: 65536,
-      cMapUrl: path.join(__dirname, "../node_modules/pdfjs-dist/cmaps/"),
-      cMapPacked: true,
     });
 
     console.log("PDF loading task created");

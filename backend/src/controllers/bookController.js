@@ -1,6 +1,6 @@
 const admin = require("../config/firebase");
 const db = admin.firestore();
-const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
+const { extractTextFromPdfUrl } = require("../pdfParseService");
 
 exports.getAllBooks = async (req, res) => {
   try {
@@ -130,7 +130,7 @@ exports.getBookContent = async (req, res) => {
     // Extract text content from the PDF
     try {
       console.log(`Starting PDF text extraction...`);
-      const textContent = await extractTextFromPdfUrlWithPdfJs(pdfPath);
+      const textContent = await extractTextFromPdfUrl(pdfPath);
       console.log(`Text extraction complete, processing pages...`);
 
       // Split text by form feed character to get pages
@@ -148,7 +148,7 @@ exports.getBookContent = async (req, res) => {
     } catch (pdfError) {
       console.error("PDF processing error:", pdfError);
 
-      // FALLBACK: Generate synthetic content from PDF name
+      // Fallback with mock content
       console.log("Using fallback content generation");
 
       // Create a simple mock content as fallback
