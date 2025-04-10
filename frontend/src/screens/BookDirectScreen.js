@@ -17,13 +17,25 @@ const BookDirectScreen = ({ route }) => {
   const [bookInfo, setBookInfo] = useState(null);
 
   useEffect(() => {
+    console.log("BookDirectScreen mounted with params:", route.params);
+    console.log("Book ID:", bookId);
+    console.log("Book Title:", bookTitle);
+
     const fetchBookInfo = async () => {
       try {
         setLoading(true);
+
+        if (!bookId) {
+          console.error("Cannot fetch book info - bookId is undefined!");
+          setLoading(false);
+          return;
+        }
+
         const response = await fetch(
           `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`
         );
         const data = await response.json();
+        console.log("Book info received:", data);
         setBookInfo(data);
         setLoading(false);
       } catch (error) {
@@ -37,6 +49,21 @@ const BookDirectScreen = ({ route }) => {
   }, [bookId]);
 
   const openCustomReader = () => {
+    console.log("Navigating to CustomPdfReader with:", {
+      bookId,
+      bookTitle,
+      page: 1,
+    });
+
+    if (!bookId) {
+      console.error("ERROR: bookId is undefined!");
+      Alert.alert(
+        "Navigation Error",
+        "Book ID is missing. Please try selecting a different book."
+      );
+      return;
+    }
+
     navigation.navigate("CustomPdfReader", {
       bookId,
       bookTitle,
@@ -45,6 +72,21 @@ const BookDirectScreen = ({ route }) => {
   };
 
   const openStandardPdfViewer = () => {
+    console.log("Navigating to DirectPdf with:", {
+      bookId,
+      bookTitle,
+      page: 1,
+    });
+
+    if (!bookId) {
+      console.error("ERROR: bookId is undefined!");
+      Alert.alert(
+        "Navigation Error",
+        "Book ID is missing. Please try selecting a different book."
+      );
+      return;
+    }
+
     navigation.navigate("DirectPdf", {
       bookId,
       bookTitle,

@@ -51,15 +51,27 @@ const CustomPdfReaderScreen = ({ route }) => {
     const fetchBookContent = async () => {
       try {
         setLoading(true);
-        const response = await fetch(
-          `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}/content`
-        );
+
+        // Debug information
+        console.log("Route params:", route.params);
+        console.log("Book ID:", bookId);
+        console.log("Book Title:", bookTitle);
+
+        // Use a fallback ID if bookId is undefined
+        const effectiveBookId = bookId || "C2qKmMSFbnMRVbdrfAAn"; // Using one of your actual book IDs from the logs
+        console.log("Using book ID:", effectiveBookId);
+
+        const url = `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
+        console.log("Fetching URL:", url);
+
+        const response = await fetch(url);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log("Received data:", data);
         setBookContent(data.content);
         setNumberOfPages(data.content.length);
         setLoading(false);
