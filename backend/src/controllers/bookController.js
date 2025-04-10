@@ -148,17 +148,29 @@ exports.getBookContent = async (req, res) => {
     } catch (pdfError) {
       console.error("PDF processing error:", pdfError);
 
-      // Return a simplified response as fallback
-      res.status(500).json({
-        message: "Failed to extract PDF content",
-        error: pdfError.message,
+      // FALLBACK: Generate synthetic content from PDF name
+      console.log("Using fallback content generation");
+
+      // Create a simple mock content as fallback
+      const fallbackPages = [];
+      const pageCount = 10; // Mock 10 pages
+
+      for (let i = 1; i <= pageCount; i++) {
+        fallbackPages.push(
+          `This is a preview of ${bookData.title} - Page ${i}.\n\n` +
+            `The PDF content could not be extracted due to an error.\n\n` +
+            `Please use the Standard PDF Reader to view the complete content.\n\n` +
+            `Error details: ${pdfError.message}`
+        );
+      }
+
+      res.json({
         bookId: docSnap.id,
         title: bookData.title,
-        // Provide at least some content to test the UI
-        totalPages: 1,
-        content: [
-          `The PDF content could not be extracted. Error: ${pdfError.message}`,
-        ],
+        totalPages: pageCount,
+        content: fallbackPages,
+        isPreview: true,
+        error: pdfError.message,
       });
     }
   } catch (error) {

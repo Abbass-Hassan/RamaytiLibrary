@@ -3,35 +3,43 @@ const axios = require("axios");
 const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
 const path = require("path");
 
-// Set the worker source path
-const pdfjsWorker = require("pdfjs-dist/legacy/build/pdf.worker.js");
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+// Properly configure PDF.js for Node.js environment
+// The key change is to explicitly set the worker source as a string
+pdfjsLib.GlobalWorkerOptions.workerSrc = ""; // Empty string to use fake worker
 
-// Configure the font paths
+// Disable font face to improve performance
 pdfjsLib.GlobalWorkerOptions.disableFontFace = true;
 
-// Set the standardFontDataUrl parameter (this is the critical fix)
+// Configure the standard font data URL
 const STANDARD_FONT_DATA_URL = path.join(
   __dirname,
   "../node_modules/pdfjs-dist/standard_fonts/"
 );
-pdfjsLib.GlobalWorkerOptions.standardFontDataUrl = STANDARD_FONT_DATA_URL;
 
 async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
   try {
+    console.log(`Starting to extract text from: ${pdfUrl}`);
+
     // 1. Download the PDF as an ArrayBuffer
     const response = await axios.get(pdfUrl, { responseType: "arraybuffer" });
     const data = new Uint8Array(response.data);
+    console.log(`Downloaded PDF: ${data.length} bytes`);
 
-    // 2. Load the PDF document with font configuration
+    // 2. Load the PDF document with proper worker configuration
     const loadingTask = pdfjsLib.getDocument({
       data,
-      standardFontDataUrl: STANDARD_FONT_DATA_URL,
+      useWorkerFetch: false,
+      isEvalSupported: false,
       disableFontFace: true,
+      nativeImageDecoderSupport: "none",
+      ignoreErrors: true,
+      // Use a string for the worker ID
+      rangeChunkSize: 65536,
       cMapUrl: path.join(__dirname, "../node_modules/pdfjs-dist/cmaps/"),
       cMapPacked: true,
     });
 
+    console.log("PDF loading task created");
     const pdf = await loadingTask.promise;
     console.log(`PDF loaded with ${pdf.numPages} pages`);
 
@@ -40,6 +48,7 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
     // 3. Loop through pages to extract text
     for (let i = 1; i <= pdf.numPages; i++) {
       try {
+        console.log(`Processing page ${i}`);
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
 
@@ -56,6 +65,7 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
       }
     }
 
+    console.log("Text extraction complete");
     return fullText;
   } catch (error) {
     console.error("Error extracting PDF text with PDF.js:", error);
