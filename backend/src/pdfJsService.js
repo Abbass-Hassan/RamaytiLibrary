@@ -35,39 +35,18 @@ function isArabicLetter(char) {
 }
 
 // Check if this character is usually at the end of a word
-// (not typically connected to the next character)
 function isEndOfWordChar(char) {
   // These characters typically end words or don't connect to the next character
-  const endChars = [
-    "ا",
-    "إ",
-    "أ",
-    "آ",
-    "د",
-    "ذ",
-    "ر",
-    "ز",
-    "و",
-    "ؤ",
-    "ء",
-    "،",
-    "؛",
-    "؟",
-    ".",
-    " ",
-    ":",
-    "!",
-    "،",
-  ];
+  const endChars = ["ا", "إ", "أ", "آ", "د", "ذ", "ر", "ز", "و", "ؤ", "ء", "ة"];
   return endChars.includes(char);
 }
 
-// Is this a character that should create a word boundary?
+// Check if character is punctuation or space
 function isPunctuationOrSpace(char) {
-  return /[\s\.,،;\?؟!\(\):\[\]\{\}]/.test(char);
+  return /[\s\.,،;\?؟!\(\):\[\]\{\}"'«»]/.test(char);
 }
 
-// Advanced processing for Arabic text content
+// Advanced processing for Arabic text content with improved word boundary detection
 function processArabicContent(textContent) {
   if (!textContent || !textContent.items || textContent.items.length === 0) {
     return "";
@@ -87,7 +66,8 @@ function processArabicContent(textContent) {
 
   // Group items by their vertical position (approximate lines)
   const lines = {};
-  const lineHeight = 5; // Tolerance for considering items on the same line
+  // Use smaller tolerance for better line detection
+  const lineHeight = 3;
 
   // First pass: collect all items by line
   textContent.items.forEach((item) => {
@@ -104,7 +84,6 @@ function processArabicContent(textContent) {
     lines[yPos].push({
       ...item,
       x: item.transform[4],
-      // Add approximate width if not available
       width: item.width || item.str.length * 5,
     });
   });
@@ -112,92 +91,103 @@ function processArabicContent(textContent) {
   // Process each line
   let result = "";
 
+  // Sort lines from top to bottom (reverse y-coordinate since PDF coordinates are bottom-up)
   Object.keys(lines)
-    .sort((a, b) => b - a)
+    .sort((a, b) => a - b)
     .forEach((y) => {
-      // Sort top to bottom
       const lineItems = lines[y];
 
       // Skip empty lines
       if (lineItems.length === 0) return;
 
-      // Sort right to left for Arabic
+      // Sort right to left for Arabic (higher x-coordinate first)
       lineItems.sort((a, b) => b.x - a.x);
 
-      // Step 1: Clean each item's text and prepare for joining
+      // Step 1: Pre-process each item's text
       const cleanedItems = lineItems.map((item) => {
+        // Remove internal whitespace but preserve important punctuation
+        const cleanText = item.str.trim().replace(/\s+/g, "");
         return {
           ...item,
-          cleanText: item.str.trim().replace(/\s+/g, ""), // Remove internal spaces
+          cleanText,
+          // Flag if this item contains punctuation that signals a word boundary
+          hasPunctuation: isPunctuationOrSpace(cleanText),
+          // Width estimation is important for word boundary detection
+          estimatedWidth: item.width || cleanText.length * 5,
         };
       });
 
-      // Step 2: Detect word boundaries using positions and linguistic rules
-      let lineText = "";
+      // Step 2: Process items to form words with improved boundary detection
+      const words = [];
       let currentWord = "";
-      let lastX = null;
+      let lastItem = null;
 
       for (let i = 0; i < cleanedItems.length; i++) {
         const item = cleanedItems[i];
+        const nextItem =
+          i < cleanedItems.length - 1 ? cleanedItems[i + 1] : null;
 
-        // Skip items without text
+        // Skip empty items
         if (!item.cleanText) continue;
 
-        // Calculate position-based word boundary
+        // Check for word boundaries
         let isWordBoundary = false;
 
-        if (lastX !== null) {
-          // Calculate distance between this item and the previous one
-          // In RTL text, the current X should be LESS than lastX
-          const distance = lastX - (item.x + (item.width || 0));
+        // Check if punctuation or space (definite word boundary)
+        if (item.hasPunctuation) {
+          isWordBoundary = true;
+        }
 
-          // If the distance is significant, it's likely a word boundary
-          if (distance > 10) {
+        // Check position-based word boundary (if we have a previous item)
+        if (lastItem) {
+          // Calculate horizontal gap (in RTL Arabic, current X is less than last X)
+          const gap = lastItem.x - (item.x + item.estimatedWidth);
+
+          // More sensitive gap detection (5 pixels can be a word boundary in some fonts)
+          if (gap > 5) {
             isWordBoundary = true;
           }
         }
 
-        // Also check linguistic rules for word boundaries
-        const lastChar =
-          currentWord.length > 0 ? currentWord[currentWord.length - 1] : "";
-        const firstChar = item.cleanText.length > 0 ? item.cleanText[0] : "";
-
-        // If the last character is one that typically ends words, also mark as boundary
-        if (lastChar && isEndOfWordChar(lastChar)) {
-          isWordBoundary = true;
+        // Check linguistic rules - if last char of previous word is a non-connecting letter
+        if (lastItem && currentWord.length > 0) {
+          const lastChar = currentWord[currentWord.length - 1];
+          if (isEndOfWordChar(lastChar)) {
+            isWordBoundary = true;
+          }
         }
 
-        // Check if the current item starts with punctuation
-        if (firstChar && isPunctuationOrSpace(firstChar)) {
-          isWordBoundary = true;
-        }
-
-        // If we determined this is a word boundary and we have a word collected
+        // If we've identified a word boundary and have text collected
         if (isWordBoundary && currentWord) {
-          lineText += currentWord + " ";
+          words.push(currentWord);
           currentWord = "";
         }
 
-        // Add the current item's text to the current word
+        // Add current text to word
         currentWord += item.cleanText;
+        lastItem = item;
 
-        // Update lastX for the next iteration
-        lastX = item.x;
-
-        // Handle the last item
-        if (i === cleanedItems.length - 1 && currentWord) {
-          lineText += currentWord;
+        // Handle the last item or if the next item is punctuation
+        if (!nextItem || (nextItem && nextItem.hasPunctuation)) {
+          if (currentWord) {
+            words.push(currentWord);
+            currentWord = "";
+          }
         }
       }
 
-      // Trim any extra spaces and add to the result
-      lineText = lineText.trim();
-
-      // We often need double spacing between lines for readability
-      if (result && lineText) {
-        result += "\n\n";
+      // Add any remaining word
+      if (currentWord) {
+        words.push(currentWord);
       }
 
+      // Join the words with spaces
+      const lineText = words.join(" ");
+
+      // Add to result with proper line spacing
+      if (result) {
+        result += "\n\n"; // Double newline for paragraph separation
+      }
       result += lineText;
     });
 
