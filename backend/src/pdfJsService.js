@@ -1,15 +1,22 @@
 const axios = require("axios");
+// Use the legacy CommonJS build with explicit path
 const pdfjsLib = require("pdfjs-dist/legacy/build/pdf");
 
-// This simple configuration works in Node.js environments
-pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(
-  `data:application/javascript,
-    ${encodeURIComponent(`
-      self.onmessage = function (e) {
-        self.postMessage({type: 'test', value: 'test'});
-      };
-    `)}`
-);
+// Disable workers for Node.js environment
+pdfjsLib.GlobalWorkerOptions.disableWorker = true;
+
+// Create a minimal NodeCanvasFactory implementation
+class NodeCanvasFactory {
+  create(width, height) {
+    return {
+      width,
+      height,
+      canvas: { style: {} },
+    };
+  }
+  reset() {}
+  destroy() {}
+}
 
 async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
   try {
@@ -18,9 +25,9 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
       throw new Error("PDF URL is undefined or null");
     }
 
-    console.log(`Starting to extract text from: ${pdfUrl}`);
+    console.log(`Starting text extraction from: ${pdfUrl}`);
 
-    // 1. Download the PDF as an ArrayBuffer
+    // Download the PDF
     const response = await axios.get(pdfUrl, {
       responseType: "arraybuffer",
       timeout: 10000, // 10 second timeout
@@ -30,40 +37,39 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
     const data = new Uint8Array(response.data);
     console.log(`Downloaded PDF: ${data.length} bytes`);
 
-    // 2. Load the PDF document with simplified configuration
+    // Configure PDF.js with minimal options to avoid worker issues
     const loadingTask = pdfjsLib.getDocument({
-      data,
+      data: data,
       disableFontFace: true,
+      nativeImageDecoderSupport: "none",
       ignoreErrors: true,
+      canvasFactory: new NodeCanvasFactory(),
     });
 
-    console.log("PDF loading task created");
+    // Wait for the PDF to load
     const pdf = await loadingTask.promise;
     console.log(`PDF loaded with ${pdf.numPages} pages`);
 
     let fullText = "";
 
-    // 3. Loop through pages to extract text
+    // Process each page
     for (let i = 1; i <= pdf.numPages; i++) {
       try {
-        console.log(`Processing page ${i}`);
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
 
-        // Join text items with a space; separate pages with a form feed
+        // Extract text from page
         const pageText = textContent.items.map((item) => item.str).join(" ");
-        fullText += pageText + "\f";
 
-        if (i % 10 === 0) {
-          console.log(`Processed ${i} pages of ${pdf.numPages}`);
-        }
+        fullText += pageText + "\f"; // Add form feed as page separator
+
+        console.log(`Processed page ${i}/${pdf.numPages}`);
       } catch (pageError) {
         console.error(`Error extracting text from page ${i}:`, pageError);
         fullText += `[Error extracting page ${i}]\f`;
       }
     }
 
-    console.log("Text extraction complete");
     return fullText;
   } catch (error) {
     console.error("Error extracting PDF text with PDF.js:", error);
