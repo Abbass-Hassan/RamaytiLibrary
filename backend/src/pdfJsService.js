@@ -18,50 +18,104 @@ class NodeCanvasFactory {
   destroy() {}
 }
 
-// Simple function to detect Arabic text
+// Helper to check if string contains Arabic characters
 function containsArabic(text) {
   return /[\u0600-\u06FF]/.test(text);
 }
 
-// Process text items more intelligently for Arabic
-function processItems(items) {
-  let result = "";
-  let isArabicContent = false;
-
-  // Check if content is primarily Arabic
-  if (items.length > 0) {
-    const sampleText = items
-      .slice(0, 10)
-      .map((item) => item.str)
-      .join("");
-    isArabicContent = containsArabic(sampleText);
+// Process text content for Arabic documents
+function processArabicContent(textContent) {
+  if (!textContent || !textContent.items || textContent.items.length === 0) {
+    return "";
   }
 
-  if (isArabicContent) {
-    // For Arabic, just concatenate without spaces
-    for (let i = 0; i < items.length; i++) {
-      result += items[i].str;
+  // Check if this is primarily an Arabic document
+  const sampleText = textContent.items
+    .slice(0, 20)
+    .map((item) => item.str)
+    .join("");
+  const isArabicDocument = containsArabic(sampleText);
 
-      // Add space only between obvious word boundaries
-      if (i < items.length - 1) {
-        // If there's a significant horizontal gap, add a space
-        const currentItem = items[i];
-        const nextItem = items[i + 1];
+  if (!isArabicDocument) {
+    // For non-Arabic documents, use the original approach
+    return textContent.items.map((item) => item.str).join(" ");
+  }
 
-        if (currentItem.transform && nextItem.transform) {
-          const gap = Math.abs(
-            currentItem.transform[4] - nextItem.transform[4]
-          );
-          if (gap > 5) {
-            result += " ";
+  // For Arabic documents, implement a more sophisticated approach
+
+  // Group items by their vertical position (approximate lines)
+  const lines = {};
+  const lineHeight = 5; // Tolerance for considering items on the same line
+
+  textContent.items.forEach((item) => {
+    if (!item.transform) return;
+
+    // Round the y-coordinate to group nearby items
+    const yPos = Math.round(item.transform[5] / lineHeight) * lineHeight;
+
+    if (!lines[yPos]) {
+      lines[yPos] = [];
+    }
+
+    lines[yPos].push(item);
+  });
+
+  // Process each line
+  let result = "";
+
+  Object.keys(lines)
+    .sort((a, b) => b - a)
+    .forEach((y) => {
+      // Sort top to bottom
+      const lineItems = lines[y];
+
+      // Sort by x position from right to left (for Arabic)
+      lineItems.sort((a, b) => {
+        if (!a.transform || !b.transform) return 0;
+        return b.transform[4] - a.transform[4];
+      });
+
+      // Special handling for Arabic text - join without spaces initially
+      let lineText = "";
+      let currentWord = "";
+
+      for (let i = 0; i < lineItems.length; i++) {
+        const item = lineItems[i];
+
+        // Skip items without text
+        if (!item.str) continue;
+
+        // Clean the string by removing extra spaces in Arabic text
+        const cleanedStr = item.str.trim();
+
+        // Add to current word
+        currentWord += cleanedStr;
+
+        // Check if we need to add a space (word boundary)
+        if (i < lineItems.length - 1) {
+          const nextItem = lineItems[i + 1];
+          if (!nextItem.transform) continue;
+
+          // Calculate gap between this item and the next
+          const currentEndX = item.transform[4] - (item.width || 0);
+          const nextStartX = nextItem.transform[4];
+          const gap = Math.abs(currentEndX - nextStartX);
+
+          // If gap is significant, it's likely a word boundary
+          if (gap > 10) {
+            // Add current word to line
+            lineText += currentWord + " ";
+            currentWord = "";
           }
         }
       }
-    }
-  } else {
-    // For non-Arabic, join with spaces as before
-    result = items.map((item) => item.str).join(" ");
-  }
+
+      // Add the last word
+      lineText += currentWord;
+
+      // Add this line to result
+      result += lineText + "\n";
+    });
 
   return result;
 }
@@ -106,8 +160,8 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
 
-        // Process text with better Arabic handling
-        const pageText = processItems(textContent.items);
+        // Process Arabic content specifically
+        const pageText = processArabicContent(textContent);
 
         fullText += pageText + "\f"; // Add form feed as page separator
 
