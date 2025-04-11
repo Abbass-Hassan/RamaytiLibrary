@@ -9,6 +9,7 @@ import {
   StyleSheet,
   TextInput,
   Modal,
+  I18nManager,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import {
@@ -19,6 +20,11 @@ import {
 import colors from "../config/colors";
 import HighlightedText from "./HighlightedText";
 
+// Helper function to detect if text contains Arabic characters
+const containsArabic = (text) => {
+  return /[\u0600-\u06FF]/.test(text);
+};
+
 const CustomPdfReaderScreen = ({ route }) => {
   // Expecting bookId, bookTitle, and optional initial page
   const { bookId, bookTitle, page } = route.params || {};
@@ -27,6 +33,7 @@ const CustomPdfReaderScreen = ({ route }) => {
   const [bookContent, setBookContent] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isArabicContent, setIsArabicContent] = useState(false);
 
   // Page tracking
   const [numberOfPages, setNumberOfPages] = useState(1);
@@ -74,6 +81,14 @@ const CustomPdfReaderScreen = ({ route }) => {
         console.log("Received data:", data);
         setBookContent(data.content);
         setNumberOfPages(data.content.length);
+
+        // Check if content is Arabic by sampling the first page
+        if (data.content && data.content.length > 0) {
+          const isArabic = containsArabic(data.content[0]);
+          setIsArabicContent(isArabic);
+          console.log("Content is Arabic:", isArabic);
+        }
+
         setLoading(false);
       } catch (error) {
         console.error("Error fetching book content:", error);
@@ -261,6 +276,17 @@ const CustomPdfReaderScreen = ({ route }) => {
   const currentPageContent = bookContent[currentPage - 1] || "";
   const currentMatch = searchResults[currentMatchIndex];
 
+  // Get text style based on language direction
+  const getTextStyle = () => {
+    return {
+      fontSize: fontSize,
+      color: textColor,
+      lineHeight: fontSize * 1.5,
+      textAlign: isArabicContent ? "right" : "left",
+      writingDirection: isArabicContent ? "rtl" : "ltr",
+    };
+  };
+
   return (
     <View style={[styles.container, { backgroundColor }]}>
       {/* Top Navigation Bar */}
@@ -299,7 +325,10 @@ const CustomPdfReaderScreen = ({ route }) => {
       {/* Search Bar */}
       <View style={styles.searchBarContainer}>
         <TextInput
-          style={styles.searchInput}
+          style={[
+            styles.searchInput,
+            { textAlign: isArabicContent ? "right" : "left" },
+          ]}
           placeholder="Search in book"
           placeholderTextColor={colors.textSecondary || "#999"}
           value={searchText}
@@ -366,29 +395,20 @@ const CustomPdfReaderScreen = ({ route }) => {
       {/* Content Display */}
       <ScrollView
         style={styles.contentContainer}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={[
+          styles.contentInner,
+          { alignItems: isArabicContent ? "flex-end" : "flex-start" },
+        ]}
       >
         {searchText && currentMatch && currentMatch.page === currentPage ? (
           <HighlightedText
             text={currentPageContent}
             highlight={searchText}
-            textStyle={{
-              fontSize: fontSize,
-              color: textColor,
-              lineHeight: fontSize * 1.5,
-            }}
+            textStyle={getTextStyle()}
             highlightStyle={{ backgroundColor: "yellow" }}
           />
         ) : (
-          <Text
-            style={{
-              fontSize: fontSize,
-              color: textColor,
-              lineHeight: fontSize * 1.5,
-            }}
-          >
-            {currentPageContent}
-          </Text>
+          <Text style={getTextStyle()}>{currentPageContent}</Text>
         )}
       </ScrollView>
 
@@ -632,6 +652,7 @@ const styles = StyleSheet.create({
   },
   contentInner: {
     padding: 16,
+    width: "100%",
   },
   modalOverlay: {
     flex: 1,

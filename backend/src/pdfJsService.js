@@ -23,13 +23,57 @@ function containsArabic(text) {
   return /[\u0600-\u06FF]/.test(text);
 }
 
-// Process text content for Arabic documents
+// Check if a character is an Arabic letter
+function isArabicLetter(char) {
+  const code = char.charCodeAt(0);
+  return (
+    (code >= 0x0600 && code <= 0x06ff) || // Arabic
+    (code >= 0x0750 && code <= 0x077f) || // Arabic Supplement
+    (code >= 0xfb50 && code <= 0xfdff) || // Arabic Presentation Forms-A
+    (code >= 0xfe70 && code <= 0xfeff)
+  ); // Arabic Presentation Forms-B
+}
+
+// Check if this character is usually at the end of a word
+// (not typically connected to the next character)
+function isEndOfWordChar(char) {
+  // These characters typically end words or don't connect to the next character
+  const endChars = [
+    "ا",
+    "إ",
+    "أ",
+    "آ",
+    "د",
+    "ذ",
+    "ر",
+    "ز",
+    "و",
+    "ؤ",
+    "ء",
+    "،",
+    "؛",
+    "؟",
+    ".",
+    " ",
+    ":",
+    "!",
+    "،",
+  ];
+  return endChars.includes(char);
+}
+
+// Is this a character that should create a word boundary?
+function isPunctuationOrSpace(char) {
+  return /[\s\.,،;\?؟!\(\):\[\]\{\}]/.test(char);
+}
+
+// Advanced processing for Arabic text content
 function processArabicContent(textContent) {
   if (!textContent || !textContent.items || textContent.items.length === 0) {
     return "";
   }
 
-  // Check if this is primarily an Arabic document
+  // Sample text to detect if document is Arabic
   const sampleText = textContent.items
     .slice(0, 20)
     .map((item) => item.str)
@@ -41,23 +85,28 @@ function processArabicContent(textContent) {
     return textContent.items.map((item) => item.str).join(" ");
   }
 
-  // For Arabic documents, implement a more sophisticated approach
-
   // Group items by their vertical position (approximate lines)
   const lines = {};
   const lineHeight = 5; // Tolerance for considering items on the same line
 
+  // First pass: collect all items by line
   textContent.items.forEach((item) => {
     if (!item.transform) return;
 
-    // Round the y-coordinate to group nearby items
+    // Get y position and normalize
     const yPos = Math.round(item.transform[5] / lineHeight) * lineHeight;
 
     if (!lines[yPos]) {
       lines[yPos] = [];
     }
 
-    lines[yPos].push(item);
+    // Store the item with its x position
+    lines[yPos].push({
+      ...item,
+      x: item.transform[4],
+      // Add approximate width if not available
+      width: item.width || item.str.length * 5,
+    });
   });
 
   // Process each line
@@ -69,52 +118,87 @@ function processArabicContent(textContent) {
       // Sort top to bottom
       const lineItems = lines[y];
 
-      // Sort by x position from right to left (for Arabic)
-      lineItems.sort((a, b) => {
-        if (!a.transform || !b.transform) return 0;
-        return b.transform[4] - a.transform[4];
+      // Skip empty lines
+      if (lineItems.length === 0) return;
+
+      // Sort right to left for Arabic
+      lineItems.sort((a, b) => b.x - a.x);
+
+      // Step 1: Clean each item's text and prepare for joining
+      const cleanedItems = lineItems.map((item) => {
+        return {
+          ...item,
+          cleanText: item.str.trim().replace(/\s+/g, ""), // Remove internal spaces
+        };
       });
 
-      // Special handling for Arabic text - join without spaces initially
+      // Step 2: Detect word boundaries using positions and linguistic rules
       let lineText = "";
       let currentWord = "";
+      let lastX = null;
 
-      for (let i = 0; i < lineItems.length; i++) {
-        const item = lineItems[i];
+      for (let i = 0; i < cleanedItems.length; i++) {
+        const item = cleanedItems[i];
 
         // Skip items without text
-        if (!item.str) continue;
+        if (!item.cleanText) continue;
 
-        // Clean the string by removing extra spaces in Arabic text
-        const cleanedStr = item.str.trim();
+        // Calculate position-based word boundary
+        let isWordBoundary = false;
 
-        // Add to current word
-        currentWord += cleanedStr;
+        if (lastX !== null) {
+          // Calculate distance between this item and the previous one
+          // In RTL text, the current X should be LESS than lastX
+          const distance = lastX - (item.x + (item.width || 0));
 
-        // Check if we need to add a space (word boundary)
-        if (i < lineItems.length - 1) {
-          const nextItem = lineItems[i + 1];
-          if (!nextItem.transform) continue;
-
-          // Calculate gap between this item and the next
-          const currentEndX = item.transform[4] - (item.width || 0);
-          const nextStartX = nextItem.transform[4];
-          const gap = Math.abs(currentEndX - nextStartX);
-
-          // If gap is significant, it's likely a word boundary
-          if (gap > 10) {
-            // Add current word to line
-            lineText += currentWord + " ";
-            currentWord = "";
+          // If the distance is significant, it's likely a word boundary
+          if (distance > 10) {
+            isWordBoundary = true;
           }
+        }
+
+        // Also check linguistic rules for word boundaries
+        const lastChar =
+          currentWord.length > 0 ? currentWord[currentWord.length - 1] : "";
+        const firstChar = item.cleanText.length > 0 ? item.cleanText[0] : "";
+
+        // If the last character is one that typically ends words, also mark as boundary
+        if (lastChar && isEndOfWordChar(lastChar)) {
+          isWordBoundary = true;
+        }
+
+        // Check if the current item starts with punctuation
+        if (firstChar && isPunctuationOrSpace(firstChar)) {
+          isWordBoundary = true;
+        }
+
+        // If we determined this is a word boundary and we have a word collected
+        if (isWordBoundary && currentWord) {
+          lineText += currentWord + " ";
+          currentWord = "";
+        }
+
+        // Add the current item's text to the current word
+        currentWord += item.cleanText;
+
+        // Update lastX for the next iteration
+        lastX = item.x;
+
+        // Handle the last item
+        if (i === cleanedItems.length - 1 && currentWord) {
+          lineText += currentWord;
         }
       }
 
-      // Add the last word
-      lineText += currentWord;
+      // Trim any extra spaces and add to the result
+      lineText = lineText.trim();
 
-      // Add this line to result
-      result += lineText + "\n";
+      // We often need double spacing between lines for readability
+      if (result && lineText) {
+        result += "\n\n";
+      }
+
+      result += lineText;
     });
 
   return result;
@@ -132,20 +216,22 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
     // Download the PDF
     const response = await axios.get(pdfUrl, {
       responseType: "arraybuffer",
-      timeout: 10000, // 10 second timeout
+      timeout: 15000, // 15 second timeout
       validateStatus: (status) => status === 200, // Only accept 200 OK responses
     });
 
     const data = new Uint8Array(response.data);
     console.log(`Downloaded PDF: ${data.length} bytes`);
 
-    // Configure PDF.js with minimal options to avoid worker issues
+    // Configure PDF.js with options for better Arabic support
     const loadingTask = pdfjsLib.getDocument({
       data: data,
       disableFontFace: true,
       nativeImageDecoderSupport: "none",
       ignoreErrors: true,
       canvasFactory: new NodeCanvasFactory(),
+      cMapUrl: "./node_modules/pdfjs-dist/cmaps/",
+      cMapPacked: true,
     });
 
     // Wait for the PDF to load
@@ -160,7 +246,7 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
 
-        // Process Arabic content specifically
+        // Process Arabic content with improved algorithm
         const pageText = processArabicContent(textContent);
 
         fullText += pageText + "\f"; // Add form feed as page separator
