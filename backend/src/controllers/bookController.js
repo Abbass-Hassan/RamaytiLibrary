@@ -116,13 +116,52 @@ exports.getBookContent = async (req, res) => {
     const bookData = docSnap.data();
     console.log(`Found book: ${bookData.title}`);
 
+    // Find the PDF path with case-insensitive field checking
+    let pdfPath = null;
+
+    // Check all the possible field names that might contain the path
+    if (bookData.pdfPath) {
+      pdfPath = bookData.pdfPath;
+    } else if (bookData.pdfpath) {
+      pdfPath = bookData.pdfpath;
+    } else if (bookData.pdf_path) {
+      pdfPath = bookData.pdf_path;
+    } else {
+      // Look through all fields to find anything that might contain a PDF URL
+      for (const key in bookData) {
+        if (
+          typeof bookData[key] === "string" &&
+          (bookData[key].endsWith(".pdf") ||
+            bookData[key].includes("pdf-hosting"))
+        ) {
+          pdfPath = bookData[key];
+          console.log(`Found PDF URL in field '${key}': ${pdfPath}`);
+          break;
+        }
+      }
+    }
+
+    if (!pdfPath) {
+      return res.status(400).json({
+        error: "PDF path not found in book data",
+        bookData: { title: bookData.title, id: docSnap.id },
+      });
+    }
+
     // Format the PDF path
-    let pdfPath = bookData.pdfPath;
-    if (pdfPath && pdfPath.includes("localhost")) {
+    if (pdfPath.includes("localhost")) {
       pdfPath = pdfPath.replace(
         "localhost",
         "ramaytilibrary-production.up.railway.app"
       );
+    }
+
+    // Convert GitHub repository URLs to raw URLs
+    if (pdfPath.includes("github.com") && pdfPath.includes("/blob/")) {
+      pdfPath = pdfPath
+        .replace("github.com", "raw.githubusercontent.com")
+        .replace("/blob/", "/");
+      console.log("Converted GitHub URL to raw URL:", pdfPath);
     }
 
     console.log(`PDF path: ${pdfPath}`);
@@ -148,9 +187,12 @@ exports.getBookContent = async (req, res) => {
     } catch (pdfError) {
       console.error("PDF processing error:", pdfError);
 
-      // Fallback: provide minimal content when extraction fails
+      // Fallback with mock content
+      console.log("Using fallback content generation");
+
+      // Create a simple mock content as fallback
       const fallbackPages = [];
-      const pageCount = 10; // Create 10 placeholder pages
+      const pageCount = 10; // Mock 10 pages
 
       for (let i = 1; i <= pageCount; i++) {
         fallbackPages.push(
@@ -166,6 +208,7 @@ exports.getBookContent = async (req, res) => {
         totalPages: pageCount,
         content: fallbackPages,
         isPreview: true,
+        error: pdfError.message,
       });
     }
   } catch (error) {
