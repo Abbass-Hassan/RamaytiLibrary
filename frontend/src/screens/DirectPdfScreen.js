@@ -73,37 +73,34 @@ const getPdfPath = async (bookId) => {
 // Download a PDF to local storage
 const downloadPdfToLocal = async (bookId, url) => {
   try {
-    // Check if URL is undefined or null
-    if (!url) {
-      console.error("PDF URL is undefined or null for book ID:", bookId);
-      throw new Error("PDF URL is missing");
-    }
-
     await ensurePdfDirectory();
     const destPath = `${PDF_BASE_DIR}book_${bookId}.pdf`;
 
-    // Properly format the URL
-    let formattedUrl = String(url).trim();
+    // Properly format and encode the URL
+    let formattedUrl = url.trim();
     console.log("Original URL:", formattedUrl);
 
-    // Convert GitHub repository URLs to raw or GitHub Pages URLs
+    // Handle GitHub URLs
     if (
       formattedUrl.includes("github.com") &&
       formattedUrl.includes("/blob/")
     ) {
-      // If it's a GitHub repository URL, convert to raw URL
       formattedUrl = formattedUrl
         .replace("github.com", "raw.githubusercontent.com")
         .replace("/blob/", "/");
       console.log("Converted GitHub URL to raw URL:", formattedUrl);
     }
 
-    // For GitHub Pages URLs, make sure they're in the correct format
+    // Handle GitHub Pages URLs
     if (formattedUrl.includes("abbass-hassan.github.io")) {
-      // Make sure it doesn't have any unnecessary segments
-      const parts = formattedUrl.split("/");
-      const filename = parts[parts.length - 1];
-      formattedUrl = `https://abbass-hassan.github.io/pdf-hosting/${filename}`;
+      // Make sure to properly encode the filename part
+      const baseUrl = "https://abbass-hassan.github.io/pdf-hosting/";
+      const filename = formattedUrl.split("/").pop(); // Get the last part of the URL (the filename)
+
+      // Ensure the filename is properly encoded
+      formattedUrl = `${baseUrl}${encodeURIComponent(
+        decodeURIComponent(filename)
+      )}`;
       console.log("Formatted GitHub Pages URL:", formattedUrl);
     }
 
@@ -122,18 +119,28 @@ const downloadPdfToLocal = async (bookId, url) => {
     console.log("Downloading PDF from URL:", formattedUrl);
     console.log("Saving to:", destPath);
 
-    // Download file
+    // Download file with proper options for special characters
     const result = await RNFS.downloadFile({
       fromUrl: formattedUrl,
       toFile: destPath,
       background: true,
       discretionary: true,
       progressInterval: 500,
+      headers: {
+        Accept: "*/*",
+        "User-Agent": "RamaytilibraryApp",
+      },
     }).promise;
 
+    // Check status code
     if (result.statusCode === 200) {
       pdfPathCache[bookId] = destPath;
       return destPath;
+    } else if (result.statusCode === 404) {
+      console.error(`PDF not found (404) at URL: ${formattedUrl}`);
+      throw new Error(
+        `PDF file not found (404). The file might have been moved or deleted.`
+      );
     } else {
       throw new Error(`Download failed with status ${result.statusCode}`);
     }

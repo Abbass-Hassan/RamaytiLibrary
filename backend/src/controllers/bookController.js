@@ -2,6 +2,45 @@ const admin = require("../config/firebase");
 const db = admin.firestore();
 const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
 
+// Helper function to clean and properly encode URLs
+function cleanAndEncodeUrl(url) {
+  if (!url) return null;
+
+  // First trim the URL
+  let cleanUrl = url.trim();
+
+  // Convert GitHub repository URLs to raw URLs
+  if (cleanUrl.includes("github.com") && cleanUrl.includes("/blob/")) {
+    // For GitHub blob URLs
+    cleanUrl = cleanUrl
+      .replace("github.com", "raw.githubusercontent.com")
+      .replace("/blob/", "/");
+    console.log("Converted GitHub URL to raw URL:", cleanUrl);
+  }
+
+  // Handle GitHub Pages URLs
+  if (cleanUrl.includes("abbass-hassan.github.io")) {
+    try {
+      // Parse the URL to separate the base URL from the filename
+      const urlParts = cleanUrl.split("/");
+      const filename = urlParts[urlParts.length - 1];
+      const baseUrl = cleanUrl.substring(0, cleanUrl.length - filename.length);
+
+      // Decode first in case it's already encoded, then re-encode properly
+      const decodedFilename = decodeURIComponent(filename);
+      const encodedFilename = encodeURIComponent(decodedFilename);
+
+      // Reconstruct the URL with properly encoded filename
+      cleanUrl = baseUrl + encodedFilename;
+      console.log("Encoded URL:", cleanUrl);
+    } catch (e) {
+      console.error("Error processing URL encoding:", e);
+    }
+  }
+
+  return cleanUrl;
+}
+
 exports.getAllBooks = async (req, res) => {
   try {
     const snapshot = await db.collection("books").get();
@@ -39,6 +78,12 @@ exports.getBookById = async (req, res) => {
         "ramaytilibrary-production.up.railway.app"
       );
     }
+
+    // Clean and encode URLs in the response
+    if (data.pdfPath) {
+      data.pdfPath = cleanAndEncodeUrl(data.pdfPath);
+    }
+
     res.json({ id: docSnap.id, ...data });
   } catch (error) {
     console.error("Error fetching book:", error);
@@ -86,12 +131,18 @@ exports.redirectToPdf = async (req, res) => {
     const section = sections[index];
     const page = section.page;
     let pdfPath = bookData.pdfPath;
+
+    // Clean and format the PDF path
     if (pdfPath && pdfPath.includes("localhost")) {
       pdfPath = pdfPath.replace(
         "localhost",
         "ramaytilibrary-production.up.railway.app"
       );
     }
+
+    // Properly encode the URL
+    pdfPath = cleanAndEncodeUrl(pdfPath);
+
     res.redirect(`${pdfPath}#page=${page}`);
   } catch (error) {
     console.error("Error redirecting to PDF:", error);
@@ -156,15 +207,10 @@ exports.getBookContent = async (req, res) => {
       );
     }
 
-    // Convert GitHub repository URLs to raw URLs
-    if (pdfPath.includes("github.com") && pdfPath.includes("/blob/")) {
-      pdfPath = pdfPath
-        .replace("github.com", "raw.githubusercontent.com")
-        .replace("/blob/", "/");
-      console.log("Converted GitHub URL to raw URL:", pdfPath);
-    }
+    // Clean and properly encode the URL (handles Arabic filenames)
+    pdfPath = cleanAndEncodeUrl(pdfPath);
 
-    console.log(`PDF path: ${pdfPath}`);
+    console.log(`Cleaned PDF path: ${pdfPath}`);
 
     // Extract text content from the PDF
     try {
