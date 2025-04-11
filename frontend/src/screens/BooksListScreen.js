@@ -63,9 +63,6 @@ const BooksListScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.screenTitle}>
-        {isDirectTab ? "Select a Book to Read" : "Book Sections"}
-      </Text>
       <FlatList
         data={books}
         keyExtractor={(item) => item.id.toString()}
