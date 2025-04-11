@@ -18,79 +18,50 @@ class NodeCanvasFactory {
   destroy() {}
 }
 
-// Helper to detect if text is in Arabic script
-function isArabicText(text) {
-  // Check if text contains Arabic characters
-  return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(
-    text
-  );
+// Simple function to detect Arabic text
+function containsArabic(text) {
+  return /[\u0600-\u06FF]/.test(text);
 }
 
-// Process text content based on script type
-function processTextItems(textItems) {
-  if (!textItems || !textItems.length) return "";
-
-  // Group items by line (using y-coordinate)
-  const lines = {};
-  const lineHeight = 3; // Tolerance for considering items on the same line
-
-  textItems.forEach((item) => {
-    // Round the y-coordinate to group nearby items
-    const yPos = Math.round(item.transform[5] / lineHeight) * lineHeight;
-
-    if (!lines[yPos]) {
-      lines[yPos] = [];
-    }
-
-    lines[yPos].push(item);
-  });
-
-  // Process each line
+// Process text items more intelligently for Arabic
+function processItems(items) {
   let result = "";
-  Object.keys(lines)
-    .sort((a, b) => a - b)
-    .forEach((y) => {
-      const lineItems = lines[y];
+  let isArabicContent = false;
 
-      // Sort items based on x-coordinate (left to right for non-Arabic, right to left for Arabic)
-      let isArabicLine = lineItems.some((item) => isArabicText(item.str));
+  // Check if content is primarily Arabic
+  if (items.length > 0) {
+    const sampleText = items
+      .slice(0, 10)
+      .map((item) => item.str)
+      .join("");
+    isArabicContent = containsArabic(sampleText);
+  }
 
-      if (isArabicLine) {
-        // Sort right to left for Arabic
-        lineItems.sort((a, b) => b.transform[4] - a.transform[4]);
+  if (isArabicContent) {
+    // For Arabic, just concatenate without spaces
+    for (let i = 0; i < items.length; i++) {
+      result += items[i].str;
 
-        // For Arabic, join without spaces for consecutive Arabic characters
-        let lineText = "";
-        for (let i = 0; i < lineItems.length; i++) {
-          const item = lineItems[i];
-          // Remove any spaces inside Arabic text segments
-          const cleanedText = item.str.replace(/\s+/g, "");
-          lineText += cleanedText;
+      // Add space only between obvious word boundaries
+      if (i < items.length - 1) {
+        // If there's a significant horizontal gap, add a space
+        const currentItem = items[i];
+        const nextItem = items[i + 1];
 
-          // Add space only if needed between words or at the end of sentence
-          if (i < lineItems.length - 1) {
-            const nextItem = lineItems[i + 1];
-            // If there's a significant gap, add a space
-            const gap =
-              Math.abs(item.transform[4] - nextItem.transform[4]) -
-              (item.width + nextItem.width);
-            if (gap > 5) {
-              lineText += " ";
-            }
+        if (currentItem.transform && nextItem.transform) {
+          const gap = Math.abs(
+            currentItem.transform[4] - nextItem.transform[4]
+          );
+          if (gap > 5) {
+            result += " ";
           }
         }
-        result += lineText;
-      } else {
-        // Sort left to right for non-Arabic
-        lineItems.sort((a, b) => a.transform[4] - b.transform[4]);
-
-        // Join with spaces for Latin and other scripts
-        const lineText = lineItems.map((item) => item.str).join(" ");
-        result += lineText;
       }
-
-      result += "\n";
-    });
+    }
+  } else {
+    // For non-Arabic, join with spaces as before
+    result = items.map((item) => item.str).join(" ");
+  }
 
   return result;
 }
@@ -114,7 +85,7 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
     const data = new Uint8Array(response.data);
     console.log(`Downloaded PDF: ${data.length} bytes`);
 
-    // Configure PDF.js with options
+    // Configure PDF.js with minimal options to avoid worker issues
     const loadingTask = pdfjsLib.getDocument({
       data: data,
       disableFontFace: true,
@@ -135,8 +106,9 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
 
-        // Process text content with special handling for Arabic text
-        const pageText = processTextItems(textContent.items);
+        // Process text with better Arabic handling
+        const pageText = processItems(textContent.items);
+
         fullText += pageText + "\f"; // Add form feed as page separator
 
         console.log(`Processed page ${i}/${pdf.numPages}`);
