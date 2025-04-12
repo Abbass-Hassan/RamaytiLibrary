@@ -113,7 +113,16 @@ const inseparablePairs = [
   "لا", // Lam-Alif ligature
   "لإ", // Lam-Alif with Hamza below
   "لأ", // Lam-Alif with Hamza above
+  "فى", // Fa-Alif Maqsura
+  "في", // Fa-Ya
+  "من", // Meem-Noon
+  "عن", // Ain-Noon
+  "إلى", // Alif-Lam-Ya
+  "على", // Ain-Lam-Ya
 ];
+
+// Single-letter words in Arabic that should not be joined
+const singleLetterWords = ["و", "ف", "ب", "ل", "ك"];
 
 // Completely redesigned Arabic text processing function
 function processArabicContent(textContent) {
@@ -218,7 +227,7 @@ function processArabicContent(textContent) {
         const gap = currentItem.x - (item.x + item.width);
         const fontSizeFactor =
           Math.max(currentItem.fontSize, item.fontSize) / 10;
-        // IMPORTANT: Keep this threshold at 1.5 as it's working well
+        // Keep this threshold at 1.5 as it's working well
         const gapThreshold = 1.5 * fontSizeFactor;
 
         // Check for inseparable pairs
@@ -226,27 +235,33 @@ function processArabicContent(textContent) {
           (pair) => lastCharOfPrev + firstCharOfCurrent === pair
         );
 
+        // Check if current item is a single letter word that should remain separate
+        const isSingleLetter =
+          item.text.length === 1 && singleLetterWords.includes(item.text);
+
         // Determine if items should be merged based on multiple factors
         const shouldMerge =
           // Spatial proximity
-          gap < gapThreshold ||
-          // Forms an inseparable pair
-          formsInseparablePair ||
-          // Last char of previous should connect to next
-          (shouldConnectToNext(lastCharOfPrev) &&
-            containsArabic(firstCharOfCurrent)) ||
-          // Current item begins with a character that typically connects to previous
-          (!isNonConnectingLetter(firstCharOfCurrent) &&
-            containsArabic(lastCharOfPrev)) ||
-          // Previous item is a prefix
-          arabicPrefixes.some(
-            (prefix) =>
-              currentItem.text === prefix || currentItem.text.endsWith(prefix)
-          ) ||
-          // Current item is a suffix
-          arabicSuffixes.some(
-            (suffix) => item.text === suffix || item.text.startsWith(suffix)
-          );
+          (gap < gapThreshold ||
+            // Forms an inseparable pair
+            formsInseparablePair ||
+            // Last char of previous should connect to next
+            (shouldConnectToNext(lastCharOfPrev) &&
+              containsArabic(firstCharOfCurrent)) ||
+            // Current item begins with a character that typically connects to previous
+            (!isNonConnectingLetter(firstCharOfCurrent) &&
+              containsArabic(lastCharOfPrev)) ||
+            // Previous item is a prefix
+            arabicPrefixes.some(
+              (prefix) =>
+                currentItem.text === prefix || currentItem.text.endsWith(prefix)
+            ) ||
+            // Current item is a suffix
+            arabicSuffixes.some(
+              (suffix) => item.text === suffix || item.text.startsWith(suffix)
+            )) &&
+          // Don't merge if current item is a standalone single letter word
+          !isSingleLetter;
 
         if (shouldMerge) {
           // Merge with current item
@@ -296,14 +311,24 @@ function postProcessArabicLine(text) {
 
   // Join specific prefix-word combinations
   for (const prefix of arabicPrefixes) {
-    const regex = new RegExp(`\\b${prefix}\\s+(\\S+)`, "g");
-    processedText = processedText.replace(regex, `${prefix}$1`);
+    // Don't process single-letter prefixes as standalone words
+    if (prefix.length === 1 && singleLetterWords.includes(prefix)) {
+      // Only join if the prefix is not surrounded by spaces (suggesting it's a standalone word)
+      const regex = new RegExp(`(?<!\\s)${prefix}\\s+(\\S+)`, "g");
+      processedText = processedText.replace(regex, `${prefix}$1`);
+    } else {
+      const regex = new RegExp(`\\b${prefix}\\s+(\\S+)`, "g");
+      processedText = processedText.replace(regex, `${prefix}$1`);
+    }
   }
 
   // Fix spacing around punctuation
   processedText = processedText
     .replace(/ ([\.،:؛؟!])/g, "$1")
     .replace(/([\.،:؛؟!]) /g, "$1 ");
+
+  // Remove trailing single characters at end of lines (like "دا")
+  processedText = processedText.replace(/\s([أ-ي])\s*$/, "");
 
   return processedText;
 }
@@ -314,7 +339,7 @@ function postProcessArabicText(text) {
 
   // Split into paragraphs
   const paragraphs = text.split(/\n+/);
-  const processedParagraphs = paragraphs.map((paragraph) => {
+  const processedParagraphs = paragraphs.map((paragraph, index) => {
     if (!paragraph.trim()) return "";
 
     // Fix common issues in Arabic text
@@ -327,6 +352,18 @@ function postProcessArabicText(text) {
       .replace(/ ([\.،:؛؟!])/g, "$1")
       .replace(/([\.،:؛؟!]) /g, "$1 ")
       .trim();
+
+    // Check for continuation with next paragraph (fragments like "دا")
+    if (
+      index < paragraphs.length - 1 &&
+      processedPara.length > 0 &&
+      processedPara.match(/[أ-ي]$/) && // Ends with Arabic letter
+      processedPara.length <= 3 && // Very short fragment
+      paragraphs[index + 1].trim().match(/^[أ-ي]/) // Next paragraph starts with Arabic letter
+    ) {
+      // This paragraph is likely a fragment that should connect to the next
+      return processedPara + paragraphs[index + 1].trim();
+    }
 
     // Split into words
     const words = processedPara.split(/\s+/);
@@ -341,6 +378,15 @@ function postProcessArabicText(text) {
 
       // Check if current word should be connected to the next word
       if (i < words.length - 1) {
+        const nextWord = words[i + 1];
+
+        // If current word is just a single character at the end, it's probably a fragment
+        if (word.length === 1 && i === words.length - 2) {
+          processedWords.push(word + nextWord);
+          i++; // Skip next word
+          continue;
+        }
+
         // If current word is a prefix
         if (
           arabicPrefixes.includes(word) ||
@@ -349,8 +395,8 @@ function postProcessArabicText(text) {
               word.endsWith(prefix) && word.length <= prefix.length + 2
           )
         ) {
-          if (containsArabic(words[i + 1])) {
-            processedWords.push(word + words[i + 1]);
+          if (containsArabic(nextWord)) {
+            processedWords.push(word + nextWord);
             i++; // Skip next word
             continue;
           }
@@ -358,15 +404,15 @@ function postProcessArabicText(text) {
 
         // If next word is a suffix
         if (
-          arabicSuffixes.includes(words[i + 1]) ||
+          arabicSuffixes.includes(nextWord) ||
           arabicSuffixes.some(
             (suffix) =>
-              words[i + 1].startsWith(suffix) &&
-              words[i + 1].length <= suffix.length + 2
+              nextWord.startsWith(suffix) &&
+              nextWord.length <= suffix.length + 2
           )
         ) {
           if (containsArabic(word)) {
-            processedWords.push(word + words[i + 1]);
+            processedWords.push(word + nextWord);
             i++; // Skip next word
             continue;
           }
@@ -379,7 +425,44 @@ function postProcessArabicText(text) {
     return processedWords.join(" ");
   });
 
-  return paragraphs.join("\n\n");
+  // Join paragraphs, but fix any connecting issues between them
+  let finalText = "";
+  for (let i = 0; i < processedParagraphs.length; i++) {
+    const para = processedParagraphs[i];
+    if (!para) continue;
+
+    // Check if this paragraph ends with a fragment that should join with next paragraph
+    if (
+      i < processedParagraphs.length - 1 &&
+      para.length > 0 &&
+      para.match(/[أ-ي]$/) && // Ends with Arabic letter
+      para.split(" ").pop().length <= 2 && // Last word is very short
+      processedParagraphs[i + 1] &&
+      processedParagraphs[i + 1].match(/^[أ-ي]/)
+    ) {
+      // Next paragraph starts with Arabic
+      // Join without paragraph break
+      finalText += para + " ";
+    } else {
+      finalText += para;
+      if (i < processedParagraphs.length - 1) {
+        finalText += "\n\n";
+      }
+    }
+  }
+
+  // Final cleanup
+  return (
+    finalText
+      // Fix common word patterns
+      .replace(/\bال (\S+)/g, "ال$1")
+      .replace(/\b([وفبكل]) (\S+)/g, "$1$2")
+      // Fix any remaining joined fragments
+      .replace(/([أ-ي]) ([أ-ي])\b/g, "$1$2")
+      // Clean repeated spaces
+      .replace(/\s{2,}/g, " ")
+      .trim()
+  );
 }
 
 // Improved PDF extraction function with robust error handling
