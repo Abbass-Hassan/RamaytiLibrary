@@ -159,18 +159,18 @@ function processArabicContent(textContent) {
   }
 
   // Group items by their approximate vertical (y) position.
-  // Using a tolerance (lineTolerance) to account for minor shifts.
+  // A tolerance is used to account for minor shifts.
   const lines = {};
   const lineTolerance = 5; // Adjust this tolerance as needed
 
   textContent.items.forEach((item) => {
     if (!item.transform) return;
-    // Normalize the y position with rounding tolerance
+    // Normalize the y position using the tolerance
     const yPos = Math.round(item.transform[5] / lineTolerance) * lineTolerance;
     if (!lines[yPos]) {
       lines[yPos] = [];
     }
-    // Remove kashida and zero-width spaces from text for better processing
+    // Remove kashida and zero-width spaces
     const cleanText = item.str
       .replace(/ـ/g, "")
       .replace(/[\u200B-\u200F]/g, "");
@@ -187,11 +187,11 @@ function processArabicContent(textContent) {
   });
 
   let result = "";
-
-  // Sort lines in descending y (from top to bottom in PDF coordinate space)
+  let previousY = null;
   const sortedYPositions = Object.keys(lines)
     .map(Number)
-    .sort((a, b) => b - a);
+    .sort((a, b) => b - a); // Descending order (from top to bottom)
+  const gapThresholdVertical = 10; // Threshold to decide paragraph breaks
 
   sortedYPositions.forEach((y) => {
     const lineItems = lines[y];
@@ -200,21 +200,21 @@ function processArabicContent(textContent) {
     // Determine if this line is Arabic by checking its items
     const isArabicLine = lineItems.some((item) => item.hasArabic);
     if (isArabicLine) {
-      // For RTL text, sort items by x descending
+      // For RTL text, sort by x descending (right-to-left)
       lineItems.sort((a, b) => b.x - a.x);
     } else {
-      // For LTR text, sort items by x ascending
+      // For LTR text, sort by x ascending
       lineItems.sort((a, b) => a.x - b.x);
     }
 
-    // Merge items that should be connected into coherent words/phrases.
+    // Process items in the line to merge them when appropriate
     const processedItems = [];
     let currentItem = null;
     for (const item of lineItems) {
       if (!currentItem) {
         currentItem = { ...item };
       } else {
-        // Calculate horizontal gap between current merged item and the new item
+        // Calculate horizontal gap between the merged item and the new item
         const gap = currentItem.x - (item.x + item.width);
         const fontSizeFactor =
           Math.max(currentItem.fontSize, item.fontSize) / 10;
@@ -245,7 +245,7 @@ function processArabicContent(textContent) {
           mergeBySuffix;
 
         if (shouldMerge) {
-          // Merge the two items: append text, accumulate width, and update x if necessary
+          // Merge items: append text, add width, and update x position if needed
           currentItem.text += item.text;
           currentItem.width += item.width;
           currentItem.x = Math.max(currentItem.x, item.x);
@@ -259,27 +259,38 @@ function processArabicContent(textContent) {
       processedItems.push(currentItem);
     }
 
-    // Join processed items to form the full line text
+    // Join processed items to create a single line of text
     let lineText = processedItems
       .map((item) => item.text)
       .join(" ")
       .trim();
     lineText = postProcessArabicLine(lineText);
-    if (result) {
-      result += "\n\n"; // Separate lines/paragraphs with double newline
+
+    // Insert a newline based on vertical gap
+    if (previousY !== null) {
+      const gap = previousY - y;
+      if (gap > gapThresholdVertical) {
+        result += "\n\n"; // Paragraph break
+      } else {
+        result += "\n"; // Single newline
+      }
     }
     result += lineText;
+    previousY = y;
   });
+
+  // Final pass: remove any newline(s) immediately preceding punctuation
+  result = result.replace(/\n+([\.،:؛؟!])/g, "$1");
 
   return postProcessArabicText(result);
 }
 
-// Post-process a single line of Arabic text
+// Process a single line of Arabic text
 function postProcessArabicLine(text) {
   if (!text) return "";
   // Collapse multiple spaces and trim
   let processedText = text.replace(/\s+/g, " ").trim();
-  // Join common prefix-word combinations (e.g., "ال" + word => "الكلمة")
+  // Join specific prefix and word combinations (e.g., "ال" + word => "الكلمة")
   for (const prefix of arabicPrefixes) {
     const regex = new RegExp(`\\b${prefix}\\s+(\\S+)`, "g");
     processedText = processedText.replace(regex, `${prefix}$1`);
@@ -291,9 +302,10 @@ function postProcessArabicLine(text) {
   return processedText;
 }
 
-// Final post-processing over the whole text for overall clean-up
+// Post-process the complete Arabic text for overall cleanup
 function postProcessArabicText(text) {
   if (!text) return "";
+  // Split into paragraphs and process each
   const paragraphs = text.split(/\n+/);
   const processedParagraphs = paragraphs.map((paragraph) => {
     if (!paragraph.trim()) return "";
