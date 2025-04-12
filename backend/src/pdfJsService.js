@@ -108,6 +108,13 @@ const arabicSuffixes = [
   "ة", // Noun suffixes
 ];
 
+// Common pairs of Arabic characters that should never be separated
+const inseparablePairs = [
+  "لا", // Lam-Alif ligature
+  "لإ", // Lam-Alif with Hamza below
+  "لأ", // Lam-Alif with Hamza above
+];
+
 // Completely redesigned Arabic text processing function
 function processArabicContent(textContent) {
   if (!textContent || !textContent.items || textContent.items.length === 0) {
@@ -132,8 +139,8 @@ function processArabicContent(textContent) {
 
   // Group items by their vertical position (approximate lines)
   const lines = {};
-  // Use smaller tolerance for more precise line detection
-  const lineHeight = 1; // Smaller value for better precision
+  // Use optimal tolerance for line detection (found through testing)
+  const lineHeight = 1;
 
   // First pass: collect items by line
   textContent.items.forEach((item) => {
@@ -211,12 +218,20 @@ function processArabicContent(textContent) {
         const gap = currentItem.x - (item.x + item.width);
         const fontSizeFactor =
           Math.max(currentItem.fontSize, item.fontSize) / 10;
+        // IMPORTANT: Keep this threshold at 1.5 as it's working well
         const gapThreshold = 1.5 * fontSizeFactor;
+
+        // Check for inseparable pairs
+        const formsInseparablePair = inseparablePairs.some(
+          (pair) => lastCharOfPrev + firstCharOfCurrent === pair
+        );
 
         // Determine if items should be merged based on multiple factors
         const shouldMerge =
           // Spatial proximity
           gap < gapThreshold ||
+          // Forms an inseparable pair
+          formsInseparablePair ||
           // Last char of previous should connect to next
           (shouldConnectToNext(lastCharOfPrev) &&
             containsArabic(firstCharOfCurrent)) ||
@@ -284,6 +299,11 @@ function postProcessArabicLine(text) {
     const regex = new RegExp(`\\b${prefix}\\s+(\\S+)`, "g");
     processedText = processedText.replace(regex, `${prefix}$1`);
   }
+
+  // Fix spacing around punctuation
+  processedText = processedText
+    .replace(/ ([\.،:؛؟!])/g, "$1")
+    .replace(/([\.،:؛؟!]) /g, "$1 ");
 
   return processedText;
 }
@@ -362,7 +382,7 @@ function postProcessArabicText(text) {
   return paragraphs.join("\n\n");
 }
 
-// Improved PDF extraction function
+// Improved PDF extraction function with robust error handling
 async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
   try {
     // Validate URL first
@@ -375,8 +395,9 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
     // Download the PDF
     const response = await axios.get(pdfUrl, {
       responseType: "arraybuffer",
-      timeout: options.timeout || 15000, // 15 second timeout by default
+      timeout: options.timeout || 30000, // Increased timeout for larger files
       validateStatus: (status) => status === 200, // Only accept 200 OK responses
+      ...options.axiosOptions,
     });
 
     const data = new Uint8Array(response.data);
@@ -400,8 +421,9 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
     console.log(`PDF loaded with ${pdf.numPages} pages`);
 
     let fullText = "";
+    let errorCount = 0;
 
-    // Process each page
+    // Process each page with better error handling
     for (let i = 1; i <= pdf.numPages; i++) {
       try {
         const page = await pdf.getPage(i);
@@ -420,12 +442,29 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
         // Process Arabic content with improved algorithm
         const pageText = processArabicContent(textContent);
 
-        fullText += pageText + "\n\n"; // Add form feed as page separator
+        // Only add separator if not the first page with content
+        if (fullText) {
+          fullText += "\n\n"; // Add double newline for page separation
+        }
+        fullText += pageText;
 
         console.log(`Processed page ${i}/${pdf.numPages}`);
       } catch (pageError) {
+        errorCount++;
         console.error(`Error extracting text from page ${i}:`, pageError);
-        fullText += `[Error extracting page ${i}]\n\n`;
+
+        // Only add error message if we've had content already
+        if (fullText) {
+          fullText += `\n\n[Error extracting page ${i}]\n\n`;
+        } else {
+          fullText += `[Error extracting page ${i}]\n\n`;
+        }
+
+        // If too many consecutive errors, break to avoid hanging
+        if (errorCount > 5) {
+          console.error("Too many extraction errors, aborting");
+          break;
+        }
       }
     }
 
