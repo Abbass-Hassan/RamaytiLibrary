@@ -75,140 +75,8 @@ function isKashida(char) {
   return char === "ـ" || char.charCodeAt(0) === 0x0640;
 }
 
-// Arabic prefixes that should be connected to following words
-const arabicPrefixes = [
-  "ال",
-  "وال",
-  "بال",
-  "لل",
-  "فال",
-  "كال", // Articles with connections
-  "و",
-  "ف",
-  "ب",
-  "ل",
-  "ك",
-  "س", // Single letter prefixes
-  "لل",
-  "لي",
-  "لك",
-  "له",
-  "لن",
-  "لم", // Lam prefixes
-  "ست",
-  "سي",
-  "سن",
-  "سا", // Sin prefixes
-  "مت",
-  "مي",
-  "من",
-  "ما", // Mim prefixes
-  "فس",
-  "في",
-  "فل",
-  "فب",
-  "فك", // Compound prefixes
-  "وس",
-  "وي",
-  "ول",
-  "وب",
-  "وك", // Compound prefixes
-  "بي",
-  "بت",
-  "بن",
-  "بم",
-  "بس", // Compound prefixes
-];
-
-// Arabic suffixes that should be connected to preceding words
-const arabicSuffixes = [
-  "ه",
-  "ها",
-  "هم",
-  "هن",
-  "هما", // Pronouns
-  "ك",
-  "كم",
-  "كن",
-  "كما", // Pronouns
-  "نا",
-  "ني", // Pronouns
-  "تم",
-  "تن",
-  "تما", // Verb endings
-  "ون",
-  "ين",
-  "ان",
-  "ات",
-  "ة",
-  "ت", // Noun/adjective endings
-  "ي",
-  "تي",
-  "ا",
-  "وا",
-  "ن", // Various endings
-];
-
-// Common Arabic words for post-processing verification
-const commonArabicWords = [
-  "في",
-  "من",
-  "إلى",
-  "على",
-  "عن",
-  "مع",
-  "هذا",
-  "هذه",
-  "ذلك",
-  "تلك",
-  "كان",
-  "كانت",
-  "يكون",
-  "أن",
-  "لا",
-  "ما",
-  "هل",
-  "قد",
-  "حتى",
-  "إذا",
-  "كل",
-  "بعض",
-  "أي",
-  "واحد",
-  "اثنين",
-  "ثلاثة",
-  "الذي",
-  "التي",
-  "الذين",
-  "يوم",
-  "ليلة",
-  "صباح",
-  "مساء",
-  "الله",
-  "الناس",
-  "الرجل",
-  "المرأة",
-  "شيء",
-  "وقت",
-  "مكان",
-  "قبل",
-  "بعد",
-  "بين",
-  "عند",
-  "حول",
-  "نحو",
-  "عام",
-  "أول",
-  "آخر",
-  "جديد",
-  "قديم",
-  "كبير",
-  "صغير",
-  "طويل",
-  "قصير",
-  "كثير",
-  "قليل",
-];
+// A selective list of common Arabic prefixes that should connect
+const arabicPrefixes = ["ال", "و", "ب", "ل", "ف", "ك"];
 
 // Completely revised: Improved processing for Arabic text extraction
 function processArabicContent(textContent) {
@@ -236,7 +104,7 @@ function processArabicContent(textContent) {
   // Group items by their vertical position (approximate lines)
   const lines = {};
   // Use smaller tolerance for more precise line detection
-  const lineHeight = 1; // Very small value for precise line grouping
+  const lineHeight = 1.5; // Reduced for more accurate line grouping
 
   // First pass: collect items by line
   textContent.items.forEach((item) => {
@@ -249,25 +117,13 @@ function processArabicContent(textContent) {
       lines[yPos] = [];
     }
 
-    // Clean item text (remove kashidas, etc.)
-    const cleanText = item.str
-      .replace(/ـ/g, "") // Remove kashidas
-      .replace(/[\u200B-\u200F]/g, ""); // Remove zero-width spaces and direction marks
-
-    // Skip empty items
-    if (!cleanText.trim()) return;
-
     // Store item with additional metadata for better processing
     lines[yPos].push({
-      text: cleanText,
-      originalText: item.str,
+      ...item,
       x: item.transform[4],
-      // Better width calculation
-      width: item.width || cleanText.length * (item.fontSize || 10) * 0.6,
+      // Better width calculation using font metrics when available
+      width: item.width || item.str.length * (item.fontSize || 10) * 0.6,
       fontSize: item.fontSize || 10,
-      hasArabic: containsArabic(cleanText),
-      // Split into individual characters for detailed analysis
-      chars: cleanText.split(""),
     });
   });
 
@@ -275,214 +131,175 @@ function processArabicContent(textContent) {
   let result = "";
 
   // Sort lines from top to bottom (reverse y-coordinate since PDF coords are bottom-up)
-  const sortedYPositions = Object.keys(lines)
-    .map(Number)
-    .sort((a, b) => b - a);
+  const sortedYPositions = Object.keys(lines).sort((a, b) => b - a);
 
-  // Track paragraphs for better formatting
-  let paragraphs = [];
-  let currentParagraph = [];
-
-  sortedYPositions.forEach((y, lineIndex) => {
+  sortedYPositions.forEach((y) => {
     const lineItems = lines[y];
 
     // Skip empty lines
     if (lineItems.length === 0) return;
 
-    // For Arabic text, sort from right to left
-    const isArabicLine = lineItems.some((item) => item.hasArabic);
-    if (isArabicLine) {
-      // Sort by x-coordinate in descending order (right to left)
-      lineItems.sort((a, b) => b.x - a.x);
-    } else {
-      // For non-Arabic, sort left to right
-      lineItems.sort((a, b) => a.x - b.x);
-    }
+    // Sort right to left for Arabic (higher x-coordinate first)
+    lineItems.sort((a, b) => b.x - a.x);
 
     // ===== ENHANCED WORD BOUNDARY DETECTION =====
 
-    // Process the line items to form coherent words
-    const processedItems = [];
-    let currentItem = null;
+    // Step 1: Clean and analyze each item first
+    const processedItems = lineItems.map((item) => {
+      // Clean the text by removing whitespace and kashidas
+      let cleanText = item.str.trim().replace(/ـ/g, "");
 
-    for (const item of lineItems) {
-      if (!currentItem) {
-        // First item in a sequence
-        currentItem = { ...item };
-      } else {
-        // Calculate horizontal gap between items
-        const gap = currentItem.x - (item.x + item.width);
-        const fontSizeFactor =
-          (Math.max(currentItem.fontSize, item.fontSize) || 10) / 10;
-        const gapThreshold = 1.5 * fontSizeFactor;
+      // Analyze character types in the item
+      let hasArabic = false;
+      let hasPunctuation = false;
 
-        // Get last character of current item and first of next
-        const lastCharOfCurrent = currentItem.text.charAt(
-          currentItem.text.length - 1
-        );
-        const firstCharOfNext = item.text.charAt(0);
-
-        // Check if items should be merged based on multiple factors
-        const shouldMerge =
-          // Spatial proximity check
-          gap < gapThreshold ||
-          // Linguistic checks for Arabic text
-          (isArabicLetter(lastCharOfCurrent) &&
-            !isNonConnectingLetter(lastCharOfCurrent) &&
-            isArabicLetter(firstCharOfNext)) ||
-          // Current item ends with a prefix
-          arabicPrefixes.some(
-            (prefix) =>
-              currentItem.text === prefix || currentItem.text.endsWith(prefix)
-          ) ||
-          // Next item is a suffix
-          arabicSuffixes.some(
-            (suffix) => item.text === suffix || item.text.startsWith(suffix)
-          );
-
-        if (shouldMerge) {
-          // Merge with current item
-          currentItem.text += item.text;
-          currentItem.width += item.width;
-          // Keep rightmost x position for RTL text
-          currentItem.x = Math.max(currentItem.x, item.x);
-        } else {
-          // Finish current item and start a new one
-          processedItems.push(currentItem);
-          currentItem = { ...item };
+      for (let i = 0; i < cleanText.length; i++) {
+        const char = cleanText[i];
+        if (isArabicLetter(char)) {
+          hasArabic = true;
+        }
+        if (isPunctuationOrSpace(char)) {
+          hasPunctuation = true;
         }
       }
+
+      return {
+        ...item,
+        cleanText,
+        hasArabic,
+        hasPunctuation,
+        // Improved width estimation for better spacing detection
+        estimatedWidth:
+          item.width || cleanText.length * (item.fontSize || 10) * 0.6,
+      };
+    });
+
+    // Step 2: Process items into words with much improved boundary detection
+    const words = [];
+    let currentWord = "";
+    let prevItem = null;
+
+    for (let i = 0; i < processedItems.length; i++) {
+      const item = processedItems[i];
+      const nextItem =
+        i < processedItems.length - 1 ? processedItems[i + 1] : null;
+
+      // Skip empty items
+      if (!item.cleanText) continue;
+
+      // Definite word boundary cases
+      let isWordBoundary = false;
+
+      // Case 1: Current item contains punctuation
+      if (item.hasPunctuation) {
+        // Extract text without punctuation
+        const textWithoutPunct = item.cleanText
+          .split("")
+          .filter((ch) => !isPunctuationOrSpace(ch))
+          .join("");
+
+        if (textWithoutPunct) {
+          currentWord += textWithoutPunct;
+        }
+        isWordBoundary = true;
+      }
+      // Case 2: Spatial positioning indicates word boundary
+      else if (prevItem && item.hasArabic && prevItem.hasArabic) {
+        // Calculate horizontal gap (adjusted for RTL)
+        const gap = prevItem.x - (item.x + item.estimatedWidth);
+
+        // Dynamic threshold based on font size for better gap detection
+        const fontSizeFactor = (item.fontSize || 10) / 10;
+        const gapThreshold = 2 * fontSizeFactor;
+
+        if (gap > gapThreshold) {
+          isWordBoundary = true;
+        }
+
+        // Case 3: Linguistic rules - previous word ends with non-connecting letter
+        if (currentWord.length > 0) {
+          const lastChar = currentWord[currentWord.length - 1];
+          if (isNonConnectingLetter(lastChar)) {
+            isWordBoundary = true;
+          }
+        }
+
+        // Add current text to word
+        currentWord += item.cleanText;
+      }
+      // Case 4: Different script transitions (e.g., Arabic to non-Arabic)
+      else if (prevItem && item.hasArabic !== prevItem.hasArabic) {
+        if (currentWord) {
+          words.push(currentWord);
+          currentWord = "";
+        }
+        currentWord += item.cleanText;
+      }
+      // Default case: just add to current word
+      else {
+        currentWord += item.cleanText;
+      }
+
+      // If we've identified a word boundary and have text collected
+      if (isWordBoundary && currentWord) {
+        words.push(currentWord);
+        currentWord = "";
+      }
+
+      // Handle end of line or transition to punctuation
+      if (!nextItem || (nextItem && nextItem.hasPunctuation)) {
+        if (currentWord) {
+          words.push(currentWord);
+          currentWord = "";
+        }
+      }
+
+      prevItem = item;
     }
 
-    // Add the last item
-    if (currentItem) {
-      processedItems.push(currentItem);
+    // Add any remaining word
+    if (currentWord) {
+      words.push(currentWord);
     }
 
-    // Create the line text by joining processed items
-    let lineText = processedItems
-      .map((item) => item.text)
-      .join(" ")
-      .trim();
+    // Join the words with spaces and add to result
+    const lineText = words.join(" ");
 
-    // Apply additional processing for Arabic text
-    lineText = processArabicLine(lineText);
-
-    // Determine if this line completes a paragraph
-    const isShortLine = lineText.length < 30;
-    const endsWithPunctuation = /[\.،؟!:]$/.test(lineText);
-    const isParagraphBreak =
-      isShortLine ||
-      endsWithPunctuation ||
-      lineIndex === 0 ||
-      lineIndex === sortedYPositions.length - 1;
-
-    // Add line to current paragraph
-    currentParagraph.push(lineText);
-
-    // Start a new paragraph if needed
-    if (isParagraphBreak) {
-      paragraphs.push(currentParagraph.join(" "));
-      currentParagraph = [];
+    // Add to result with proper paragraph spacing
+    if (result) {
+      result += "\n\n"; // Double newline for paragraph separation
     }
+    result += lineText;
   });
 
-  // Add any remaining paragraph
-  if (currentParagraph.length > 0) {
-    paragraphs.push(currentParagraph.join(" "));
-  }
-
-  // Join paragraphs with double newlines
-  result = paragraphs.filter((p) => p.trim()).join("\n\n");
-
-  // Final post-processing pass
-  return finalizeArabicText(result);
+  // Final light post-processing - fix common Arabic prefix spacing issues
+  return improveArabicText(result);
 }
 
-// Process a single line of Arabic text
-function processArabicLine(text) {
+// Light post-processing for Arabic text to fix common issues
+function improveArabicText(text) {
   if (!text) return "";
 
-  // Remove excessive spaces
-  let processed = text.replace(/\s+/g, " ").trim();
+  // Fix common prefix spacing issues only - keep changes minimal
+  let processed = text;
 
-  // Join common Arabic prefixes with the following word
+  // Only fix the most common Arabic prefixes
   for (const prefix of arabicPrefixes) {
-    const regex = new RegExp(`\\b${prefix}\\s+(\\S+)`, "g");
-    processed = processed.replace(regex, `${prefix}$1`);
+    const regex = new RegExp(`\\b${prefix} `, "g");
+    processed = processed.replace(regex, `${prefix}`);
   }
 
-  // Fix spacing around punctuation
-  processed = processed
-    .replace(/ ([\.،:؛؟!])/g, "$1")
-    .replace(/([\.،:؛؟!]) /g, "$1 ");
+  // Remove kashidas if any remain
+  processed = processed.replace(/ـ/g, "");
+
+  // Normalize spaces but keep paragraph breaks
+  processed = processed.replace(/[ \t]+/g, " ");
+  processed = processed.replace(/\n +/g, "\n");
 
   return processed;
 }
 
-// Final post-processing steps for Arabic text
-function finalizeArabicText(text) {
-  if (!text) return "";
-
-  // Split text into words for processing
-  const words = text.split(/\s+/);
-  const processedWords = [];
-
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i];
-    if (!word) continue;
-
-    // Check if this word should be joined with the next word
-    if (i < words.length - 1) {
-      const nextWord = words[i + 1];
-
-      // Check if current word is a prefix that should connect to the next word
-      const hasPrefixEnding = arabicPrefixes.some(
-        (prefix) =>
-          word === prefix ||
-          (word.length <= prefix.length + 2 && word.endsWith(prefix))
-      );
-
-      // Check if next word is a suffix that should connect to this word
-      const hasSuffixStart = arabicSuffixes.some(
-        (suffix) =>
-          nextWord === suffix ||
-          (nextWord.length <= suffix.length + 2 && nextWord.startsWith(suffix))
-      );
-
-      if (
-        (hasPrefixEnding && containsArabic(nextWord)) ||
-        (hasSuffixStart && containsArabic(word))
-      ) {
-        processedWords.push(word + nextWord);
-        i++; // Skip next word
-        continue;
-      }
-    }
-
-    processedWords.push(word);
-  }
-
-  // Join words with proper spacing
-  let processedText = processedWords.join(" ");
-
-  // Additional Arabic-specific fixes
-  processedText = processedText
-    // Fix common spacing issues around punctuation
-    .replace(/ ([\.،:؛؟!])/g, "$1")
-    .replace(/([\.،:؛؟!]) /g, "$1 ")
-    // Fix common mistakes in extracted Arabic text
-    .replace(/ي/g, "ي") // Normalize Yaa
-    .replace(/ك/g, "ك") // Normalize Kaaf
-    .replace(/ه‍/g, "ه") // Normalize Haa
-    // Fix common word patterns
-    .replace(/ال (\S+)/g, "ال$1")
-    .replace(/([وفبكل]) (\S+)/g, "$1$2");
-
-  return processedText;
-}
-
-// Improved PDF extraction function with enhanced error handling and options
+// Improved PDF extraction function with enhanced error handling
 async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
   try {
     // Validate URL first
@@ -505,10 +322,9 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
     // Configure PDF.js with options for better Arabic support
     const loadingTask = pdfjsLib.getDocument({
       data: data,
-      disableFontFace: false, // Enable font information for better extraction
-      useSystemFonts: true, // Use system fonts when possible
+      disableFontFace: true,
       nativeImageDecoderSupport: "none",
-      ignoreErrors: true, // Continue despite errors
+      ignoreErrors: true,
       canvasFactory: new NodeCanvasFactory(),
       cMapUrl: "./node_modules/pdfjs-dist/cmaps/",
       cMapPacked: true,
@@ -532,23 +348,20 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
 
         // Enhanced options for text extraction
         const textContent = await page.getTextContent({
-          normalizeWhitespace: false, // Preserve original spaces
-          disableCombineTextItems: true, // Don't combine items to preserve positioning
-          includeMarkedContent: true, // Include all marked content
+          normalizeWhitespace: true,
+          disableCombineTextItems: false,
+          includeMarkedContent: true,
         });
 
         // Process Arabic content with improved algorithm
         const pageText = processArabicContent(textContent);
 
-        if (fullText && pageText) {
-          fullText += "\n\n"; // Add double newline between pages
-        }
-        fullText += pageText;
+        fullText += pageText + "\f"; // Add form feed as page separator
 
         console.log(`Processed page ${i}/${pdf.numPages}`);
       } catch (pageError) {
         console.error(`Error extracting text from page ${i}:`, pageError);
-        fullText += `[Error extracting page ${i}]\n\n`;
+        fullText += `[Error extracting page ${i}]\f`;
       }
     }
 
