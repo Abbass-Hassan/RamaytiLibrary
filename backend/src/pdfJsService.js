@@ -34,91 +34,93 @@ function isArabicLetter(char) {
   );
 }
 
-// Improved: Check if this character is usually at the end of a word or non-connecting
-function isEndOfWordChar(char) {
-  // These characters typically end words or don't connect to the next character
-  // Expanded list to include more characters that don't connect to the following character
-  const endChars = [
+// Enhanced: Comprehensive check for non-connecting letters in Arabic
+function isNonConnectingLetter(char) {
+  // These characters don't connect to the following character
+  const nonConnecting = [
     "ا",
-    "إ",
     "أ",
-    "آ",
+    "إ",
+    "آ", // Alif forms
     "د",
-    "ذ",
+    "ذ", // Dal forms
     "ر",
-    "ز",
+    "ز", // Ra forms
     "و",
-    "ؤ",
-    "ء",
+    "ؤ", // Waw forms
     "ة",
-    // Adding more non-connecting characters
-    "ى",
-    "ئ",
-    "ظ",
-    "ط",
+    "ء", // Ta marbuta and Hamza
+    "ى", // Alif maqsura
   ];
-  return endChars.includes(char);
+  return nonConnecting.includes(char);
 }
 
-// Improved: More comprehensive check for punctuation or space
+// Enhanced: Better detection of punctuation and spaces in multilingual text
 function isPunctuationOrSpace(char) {
-  // Added more Arabic-specific punctuation and improved space detection
+  // Include common Arabic/Latin punctuation and various space types
   return (
-    /[\s\.\,،;\?؟!\(\):\[\]\{\}"'«»\-\u2000-\u200F\u2028-\u202F]/.test(char) ||
+    /[\s\.\,،;\?؟!\(\):\[\]\{\}"'«»\-–—\u2000-\u200F\u2028-\u202F]/.test(
+      char
+    ) ||
     char === String.fromCharCode(0x00a0) || // Non-breaking space
     char === String.fromCharCode(0x2003) || // Em space
-    char === String.fromCharCode(0x200c)
-  ); // Zero-width non-joiner
+    char === String.fromCharCode(0x200c) || // Zero-width non-joiner
+    char === String.fromCharCode(0x200d) || // Zero-width joiner
+    char === String.fromCharCode(0x200e) || // LTR mark
+    char === String.fromCharCode(0x200f) // RTL mark
+  );
 }
 
-// Improved: Check for kashida (tatweel) - Arabic text justification character
+// Check for kashida (tatweel) - Arabic text justification character
 function isKashida(char) {
   return char === "ـ" || char.charCodeAt(0) === 0x0640;
 }
 
-// Improved: Advanced processing for Arabic text content with better word boundary detection
+// Completely revised: Improved processing for Arabic text extraction
 function processArabicContent(textContent) {
   if (!textContent || !textContent.items || textContent.items.length === 0) {
     return "";
   }
 
-  // Log basic information about the textContent for debugging
+  // Log basic information for debugging
   console.log(`Processing ${textContent.items.length} text items`);
 
-  // Sample text to detect if document is Arabic
+  // Sample text to detect if document is primarily Arabic
   const sampleText = textContent.items
-    .slice(0, 20)
+    .slice(0, Math.min(20, textContent.items.length))
     .map((item) => item.str)
     .join("");
+
   const isArabicDocument = containsArabic(sampleText);
+  console.log(`Document appears to be in Arabic: ${isArabicDocument}`);
 
   if (!isArabicDocument) {
-    // For non-Arabic documents, use the original approach
+    // For non-Arabic documents, use standard approach
     return textContent.items.map((item) => item.str).join(" ");
   }
 
   // Group items by their vertical position (approximate lines)
   const lines = {};
-  // Use smaller tolerance for better line detection
-  const lineHeight = 2; // Reduced from 3 to 2 for more precise line detection
+  // Use smaller tolerance for more precise line detection
+  const lineHeight = 1.5; // Reduced for more accurate line grouping
 
-  // First pass: collect all items by line
+  // First pass: collect items by line
   textContent.items.forEach((item) => {
     if (!item.transform) return;
 
-    // Get y position and normalize
+    // Get y position and normalize to group items into lines
     const yPos = Math.round(item.transform[5] / lineHeight) * lineHeight;
 
     if (!lines[yPos]) {
       lines[yPos] = [];
     }
 
-    // Store the item with its x position and improved width estimation
+    // Store item with additional metadata for better processing
     lines[yPos].push({
       ...item,
       x: item.transform[4],
-      // Improved width estimation for better gap detection
-      width: item.width || item.str.length * (item.fontSize || 10) * 0.5,
+      // Better width calculation using font metrics when available
+      width: item.width || item.str.length * (item.fontSize || 10) * 0.6,
       fontSize: item.fontSize || 10,
     });
   });
@@ -126,130 +128,152 @@ function processArabicContent(textContent) {
   // Process each line
   let result = "";
 
-  // Sort lines from top to bottom (reverse y-coordinate since PDF coordinates are bottom-up)
-  Object.keys(lines)
-    .sort((a, b) => a - b)
-    .forEach((y) => {
-      const lineItems = lines[y];
+  // Sort lines from top to bottom (reverse y-coordinate since PDF coords are bottom-up)
+  const sortedYPositions = Object.keys(lines).sort((a, b) => b - a);
 
-      // Skip empty lines
-      if (lineItems.length === 0) return;
+  sortedYPositions.forEach((y) => {
+    const lineItems = lines[y];
 
-      // Sort right to left for Arabic (higher x-coordinate first)
-      lineItems.sort((a, b) => b.x - a.x);
+    // Skip empty lines
+    if (lineItems.length === 0) return;
 
-      // Step 1: Pre-process each item's text
-      const cleanedItems = lineItems.map((item) => {
-        // Remove internal whitespace but preserve important punctuation
-        let cleanText = item.str.trim();
+    // Sort right to left for Arabic (higher x-coordinate first)
+    lineItems.sort((a, b) => b.x - a.x);
 
-        // New: Remove kashidas (tatweel) that might be causing incorrect connections
-        cleanText = cleanText.replace(/ـ/g, "");
+    // ===== ENHANCED WORD BOUNDARY DETECTION =====
 
-        return {
-          ...item,
-          cleanText,
-          // Flag if this item contains punctuation that signals a word boundary
-          hasPunctuation: cleanText
-            .split("")
-            .some((ch) => isPunctuationOrSpace(ch)),
-          // Improved width estimation is important for word boundary detection
-          estimatedWidth:
-            item.width || cleanText.length * (item.fontSize || 10) * 0.5,
-        };
-      });
+    // Step 1: Clean and analyze each item first
+    const processedItems = lineItems.map((item) => {
+      // Clean the text by removing whitespace and kashidas
+      let cleanText = item.str.trim().replace(/ـ/g, "");
 
-      // Step 2: Process items to form words with improved boundary detection
-      const words = [];
-      let currentWord = "";
-      let lastItem = null;
+      // Analyze character types in the item
+      let hasArabic = false;
+      let hasPunctuation = false;
 
-      for (let i = 0; i < cleanedItems.length; i++) {
-        const item = cleanedItems[i];
-        const nextItem =
-          i < cleanedItems.length - 1 ? cleanedItems[i + 1] : null;
+      for (let i = 0; i < cleanText.length; i++) {
+        const char = cleanText[i];
+        if (isArabicLetter(char)) {
+          hasArabic = true;
+        }
+        if (isPunctuationOrSpace(char)) {
+          hasPunctuation = true;
+        }
+      }
 
-        // Skip empty items
-        if (!item.cleanText) continue;
+      return {
+        ...item,
+        cleanText,
+        hasArabic,
+        hasPunctuation,
+        // Improved width estimation for better spacing detection
+        estimatedWidth:
+          item.width || cleanText.length * (item.fontSize || 10) * 0.6,
+      };
+    });
 
-        // Check for word boundaries
-        let isWordBoundary = false;
+    // Step 2: Process items into words with much improved boundary detection
+    const words = [];
+    let currentWord = "";
+    let prevItem = null;
 
-        // Check if current item has punctuation (definite word boundary)
-        if (item.hasPunctuation) {
-          // Extract actual text without punctuation
-          const textWithoutPunctuation = item.cleanText
-            .split("")
-            .filter((ch) => !isPunctuationOrSpace(ch))
-            .join("");
-          if (textWithoutPunctuation) {
-            currentWord += textWithoutPunctuation;
-          }
+    for (let i = 0; i < processedItems.length; i++) {
+      const item = processedItems[i];
+      const nextItem =
+        i < processedItems.length - 1 ? processedItems[i + 1] : null;
+
+      // Skip empty items
+      if (!item.cleanText) continue;
+
+      // Definite word boundary cases
+      let isWordBoundary = false;
+
+      // Case 1: Current item contains punctuation
+      if (item.hasPunctuation) {
+        // Extract text without punctuation
+        const textWithoutPunct = item.cleanText
+          .split("")
+          .filter((ch) => !isPunctuationOrSpace(ch))
+          .join("");
+
+        if (textWithoutPunct) {
+          currentWord += textWithoutPunct;
+        }
+        isWordBoundary = true;
+      }
+      // Case 2: Spatial positioning indicates word boundary
+      else if (prevItem && item.hasArabic && prevItem.hasArabic) {
+        // Calculate horizontal gap (adjusted for RTL)
+        const gap = prevItem.x - (item.x + item.estimatedWidth);
+
+        // Dynamic threshold based on font size for better gap detection
+        const fontSizeFactor = (item.fontSize || 10) / 10;
+        const gapThreshold = 2 * fontSizeFactor;
+
+        if (gap > gapThreshold) {
           isWordBoundary = true;
-        } else {
-          // Check position-based word boundary (if we have a previous item)
-          if (lastItem) {
-            // Calculate horizontal gap (in RTL Arabic, current X is less than last X)
-            const gap = lastItem.x - (item.x + item.estimatedWidth);
-
-            // Dynamic gap threshold based on font size
-            const fontSizeFactor = (item.fontSize || 10) / 10;
-            const gapThreshold = 3 * fontSizeFactor; // Adjusted threshold
-
-            // More sensitive gap detection
-            if (gap > gapThreshold) {
-              isWordBoundary = true;
-            }
-          }
-
-          // Check linguistic rules - if last char of previous word is a non-connecting letter
-          if (lastItem && currentWord.length > 0) {
-            const lastChar = currentWord[currentWord.length - 1];
-            if (isEndOfWordChar(lastChar)) {
-              isWordBoundary = true;
-            }
-          }
-
-          // Add current text to word
-          currentWord += item.cleanText;
         }
 
-        // If we've identified a word boundary and have text collected
-        if (isWordBoundary && currentWord) {
+        // Case 3: Linguistic rules - previous word ends with non-connecting letter
+        if (currentWord.length > 0) {
+          const lastChar = currentWord[currentWord.length - 1];
+          if (isNonConnectingLetter(lastChar)) {
+            isWordBoundary = true;
+          }
+        }
+
+        // Add current text to word
+        currentWord += item.cleanText;
+      }
+      // Case 4: Different script transitions (e.g., Arabic to non-Arabic)
+      else if (prevItem && item.hasArabic !== prevItem.hasArabic) {
+        if (currentWord) {
           words.push(currentWord);
           currentWord = "";
         }
+        currentWord += item.cleanText;
+      }
+      // Default case: just add to current word
+      else {
+        currentWord += item.cleanText;
+      }
 
-        lastItem = item;
+      // If we've identified a word boundary and have text collected
+      if (isWordBoundary && currentWord) {
+        words.push(currentWord);
+        currentWord = "";
+      }
 
-        // Handle the last item or if the next item is punctuation
-        if (!nextItem || (nextItem && nextItem.hasPunctuation)) {
-          if (currentWord) {
-            words.push(currentWord);
-            currentWord = "";
-          }
+      // Handle end of line or transition to punctuation
+      if (!nextItem || (nextItem && nextItem.hasPunctuation)) {
+        if (currentWord) {
+          words.push(currentWord);
+          currentWord = "";
         }
       }
 
-      // Add any remaining word
-      if (currentWord) {
-        words.push(currentWord);
-      }
+      prevItem = item;
+    }
 
-      // Join the words with spaces
-      const lineText = words.join(" ");
+    // Add any remaining word
+    if (currentWord) {
+      words.push(currentWord);
+    }
 
-      // Add to result with proper line spacing
-      if (result) {
-        result += "\n\n"; // Double newline for paragraph separation
-      }
-      result += lineText;
-    });
+    // Join the words with spaces and add to result
+    const lineText = words.join(" ");
+
+    // Add to result with proper paragraph spacing
+    if (result) {
+      result += "\n\n"; // Double newline for paragraph separation
+    }
+    result += lineText;
+  });
 
   return result;
 }
 
-// Improved PDF extraction function with enhanced error handling and options
+// Improved PDF extraction function with enhanced error handling
 async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
   try {
     // Validate URL first
