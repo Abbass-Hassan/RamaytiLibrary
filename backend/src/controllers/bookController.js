@@ -1,6 +1,14 @@
 const admin = require("../config/firebase");
 const db = admin.firestore();
 const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
+const path = require("path");
+const fs = require("fs");
+
+// Helper function to construct local file path
+function getLocalPdfPath(bookId, filename) {
+  // Construct path to the public PDF directory
+  return `/public/pdfs/${bookId}/${filename}`;
+}
 
 // Helper function to clean and properly encode URLs
 function cleanAndEncodeUrl(url) {
@@ -8,6 +16,11 @@ function cleanAndEncodeUrl(url) {
 
   // First trim the URL
   let cleanUrl = url.trim();
+
+  // Check if it's already a local path
+  if (cleanUrl.startsWith("/public/")) {
+    return cleanUrl;
+  }
 
   // Convert GitHub repository URLs to raw URLs
   if (cleanUrl.includes("github.com") && cleanUrl.includes("/blob/")) {
@@ -46,11 +59,24 @@ exports.getAllBooks = async (req, res) => {
     const snapshot = await db.collection("books").get();
     const books = snapshot.docs.map((doc) => {
       const data = doc.data();
-      if (data.pdfPath && data.pdfPath.includes("localhost")) {
-        data.pdfPath = data.pdfPath.replace(
-          "localhost",
-          "ramaytilibrary-production.up.railway.app"
-        );
+      if (data.pdfPath) {
+        // Check if we need to convert to local path
+        if (
+          data.pdfPath.includes("github.io") ||
+          data.pdfPath.includes("raw.githubusercontent.com")
+        ) {
+          // Get the filename from the URL
+          const urlParts = data.pdfPath.split("/");
+          const filename = urlParts[urlParts.length - 1];
+
+          // Construct local path
+          data.pdfPath = getLocalPdfPath(doc.id, filename);
+        } else if (data.pdfPath.includes("localhost")) {
+          data.pdfPath = data.pdfPath.replace(
+            "localhost",
+            "ramaytilibrary-production.up.railway.app"
+          );
+        }
       }
       return { id: doc.id, ...data };
     });
@@ -72,15 +98,26 @@ exports.getBookById = async (req, res) => {
     }
 
     const data = docSnap.data();
-    if (data.pdfPath && data.pdfPath.includes("localhost")) {
-      data.pdfPath = data.pdfPath.replace(
-        "localhost",
-        "ramaytilibrary-production.up.railway.app"
-      );
-    }
-
-    // Clean and encode URLs in the response
     if (data.pdfPath) {
+      // Check if we need to convert to local path
+      if (
+        data.pdfPath.includes("github.io") ||
+        data.pdfPath.includes("raw.githubusercontent.com")
+      ) {
+        // Get the filename from the URL
+        const urlParts = data.pdfPath.split("/");
+        const filename = urlParts[urlParts.length - 1];
+
+        // Construct local path
+        data.pdfPath = getLocalPdfPath(bookId, filename);
+      } else if (data.pdfPath.includes("localhost")) {
+        data.pdfPath = data.pdfPath.replace(
+          "localhost",
+          "ramaytilibrary-production.up.railway.app"
+        );
+      }
+
+      // Clean and encode URLs in the response
       data.pdfPath = cleanAndEncodeUrl(data.pdfPath);
     }
 
@@ -132,8 +169,19 @@ exports.redirectToPdf = async (req, res) => {
     const page = section.page;
     let pdfPath = bookData.pdfPath;
 
-    // Clean and format the PDF path
-    if (pdfPath && pdfPath.includes("localhost")) {
+    // Convert to local path if needed
+    if (
+      pdfPath &&
+      (pdfPath.includes("github.io") ||
+        pdfPath.includes("raw.githubusercontent.com"))
+    ) {
+      // Get the filename from the URL
+      const urlParts = pdfPath.split("/");
+      const filename = urlParts[urlParts.length - 1];
+
+      // Construct local path
+      pdfPath = getLocalPdfPath(bookId, filename);
+    } else if (pdfPath && pdfPath.includes("localhost")) {
       pdfPath = pdfPath.replace(
         "localhost",
         "ramaytilibrary-production.up.railway.app"
@@ -199,8 +247,18 @@ exports.getBookContent = async (req, res) => {
       });
     }
 
-    // Format the PDF path
-    if (pdfPath.includes("localhost")) {
+    // Convert to local path if needed
+    if (
+      pdfPath.includes("github.io") ||
+      pdfPath.includes("raw.githubusercontent.com")
+    ) {
+      // Get the filename from the URL
+      const urlParts = pdfPath.split("/");
+      const filename = urlParts[urlParts.length - 1];
+
+      // Construct local path
+      pdfPath = getLocalPdfPath(bookId, filename);
+    } else if (pdfPath.includes("localhost")) {
       pdfPath = pdfPath.replace(
         "localhost",
         "ramaytilibrary-production.up.railway.app"
