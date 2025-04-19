@@ -274,251 +274,252 @@ export default function Dashboard() {
       </nav>
       <br />
       <br />
-
       <main className="dashboard-content">
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
-
-        {/* Book upload form */}
+        {/* Horizontal layout container */}
         {!selectedBook && (
-          <div className="dashboard-card">
-            <h2>Upload New Book</h2>
-            <form onSubmit={handleSubmit} className="upload-form">
-              <div className="form-group">
-                <label htmlFor="title">Book Title</label>
-                <input
-                  type="text"
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Enter book title"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="pdf">PDF File</label>
-                <input
-                  type="file"
-                  id="pdf"
-                  accept=".pdf"
-                  onChange={handleFileChange}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Sections</label>
-                <div className="sections-container">
-                  {sections.map((section, index) => (
-                    <div key={index} className="section-row">
-                      <input
-                        type="text"
-                        value={section.name}
-                        onChange={(e) =>
-                          handleSectionChange(index, "name", e.target.value)
-                        }
-                        placeholder="Section name"
-                      />
-                      <input
-                        type="number"
-                        value={section.page}
-                        onChange={(e) =>
-                          handleSectionChange(index, "page", e.target.value)
-                        }
-                        placeholder="Page"
-                        min="1"
-                      />
-                      <button
-                        type="button"
-                        className="remove-btn"
-                        onClick={() => removeSection(index)}
-                      >
-                        &times;
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="add-section-btn"
-                    onClick={addSection}
-                  >
-                    + Add Section
-                  </button>
-                </div>
-              </div>
-
-              <button type="submit" className="submit-btn" disabled={loading}>
-                {loading ? "Uploading..." : "Upload Book"}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Book details view */}
-        {selectedBook && (
-          <div className="dashboard-card">
-            <div className="book-details-header">
-              <button className="back-btn" onClick={closeBookDetails}>
-                &larr; Back to books
-              </button>
-              <h2>{selectedBook.title}</h2>
-            </div>
-
-            <div className="book-details">
-              <div className="book-details-row">
-                <span className="detail-label">PDF:</span>
-                <a
-                  href={`http://localhost:3000${selectedBook.pdfPath}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="pdf-link"
-                >
-                  View PDF
-                </a>
-              </div>
-
-              <div className="book-details-row">
-                <span className="detail-label">Uploaded:</span>
-                <span>
-                  {selectedBook.uploadedAt
-                    ? new Date(
-                        selectedBook.uploadedAt.seconds * 1000
-                      ).toLocaleString()
-                    : "N/A"}
-                </span>
-              </div>
-
-              <div className="sections-header">
-                <h3>Sections</h3>
-                {!editingSections ? (
-                  <button className="edit-btn" onClick={startEditingSections}>
-                    Edit Sections
-                  </button>
-                ) : (
-                  <button
-                    className="save-btn"
-                    onClick={saveEditedSections}
-                    disabled={loading}
-                  >
-                    {loading ? "Saving..." : "Save Changes"}
-                  </button>
-                )}
-              </div>
-
-              {!editingSections ? (
-                <div className="sections-list">
-                  {selectedBook.sections && selectedBook.sections.length > 0 ? (
-                    <ul>
-                      {selectedBook.sections.map((section, index) => (
-                        <li key={index}>
-                          <span className="section-name">{section.name}</span>
-                          <span className="section-page">
-                            Page {section.page}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>No sections defined</p>
-                  )}
-                </div>
+          <div className="dashboard-horizontal-layout">
+            {/* Books list on the left */}
+            <div className="dashboard-card books-card">
+              <h2>Books Library</h2>
+              {loading && <p className="loading-message">Loading books...</p>}
+              {!loading && books.length === 0 ? (
+                <p className="empty-message">No books uploaded yet.</p>
               ) : (
-                <div className="sections-container">
-                  {editedSections.map((section, index) => (
-                    <div key={index} className="section-row">
-                      <input
-                        type="text"
-                        value={section.name}
-                        onChange={(e) =>
-                          handleEditedSectionChange(
-                            index,
-                            "name",
-                            e.target.value
-                          )
-                        }
-                        placeholder="Section name"
-                      />
-                      <input
-                        type="number"
-                        value={section.page}
-                        onChange={(e) =>
-                          handleEditedSectionChange(
-                            index,
-                            "page",
-                            e.target.value
-                          )
-                        }
-                        placeholder="Page"
-                        min="1"
-                      />
-                      <button
-                        type="button"
-                        className="remove-btn"
-                        onClick={() => removeEditedSection(index)}
-                      >
-                        &times;
-                      </button>
+                <div className="books-list">
+                  {books.map((book) => (
+                    <div key={book.id} className="book-item">
+                      <div className="book-info">
+                        <h3>{book.title}</h3>
+                        <p>
+                          Sections: {book.sections ? book.sections.length : 0}
+                        </p>
+                      </div>
+                      <div className="book-actions">
+                        <button
+                          className="view-btn"
+                          onClick={() => viewBook(book)}
+                        >
+                          View Details
+                        </button>
+                        <button
+                          className="delete-btn"
+                          onClick={() => deleteBook(book.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    className="add-section-btn"
-                    onClick={addEditedSection}
-                  >
-                    + Add Section
-                  </button>
                 </div>
               )}
+            </div>
 
-              <div className="book-actions">
-                <button
-                  className="delete-btn"
-                  onClick={() => deleteBook(selectedBook.id)}
-                  disabled={loading}
-                >
-                  Delete Book
+            {/* Upload form on the right */}
+            <div className="dashboard-card upload-card">
+              <h2>Upload New Book</h2>
+              <form onSubmit={handleSubmit} className="upload-form">
+                <div className="form-group">
+                  <label htmlFor="title">Book Title</label>
+                  <input
+                    type="text"
+                    id="title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Enter book title"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="pdf">PDF File</label>
+                  <input
+                    type="file"
+                    id="pdf"
+                    accept=".pdf"
+                    onChange={handleFileChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Sections</label>
+                  <div className="sections-container">
+                    {sections.map((section, index) => (
+                      <div key={index} className="section-row">
+                        <input
+                          type="text"
+                          value={section.name}
+                          onChange={(e) =>
+                            handleSectionChange(index, "name", e.target.value)
+                          }
+                          placeholder="Section name"
+                        />
+                        <input
+                          type="number"
+                          value={section.page}
+                          onChange={(e) =>
+                            handleSectionChange(index, "page", e.target.value)
+                          }
+                          placeholder="Page"
+                          min="1"
+                        />
+                        <button
+                          type="button"
+                          className="remove-btn"
+                          onClick={() => removeSection(index)}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="add-section-btn"
+                      onClick={addSection}
+                    >
+                      + Add Section
+                    </button>
+                  </div>
+                </div>
+
+                <button type="submit" className="submit-btn" disabled={loading}>
+                  {loading ? "Uploading..." : "Upload Book"}
                 </button>
-              </div>
+              </form>
             </div>
           </div>
         )}
-
-        {/* Books list */}
-        {!selectedBook && (
-          <div className="dashboard-card">
-            <h2>Books Library</h2>
-            {loading && <p className="loading-message">Loading books...</p>}
-            {!loading && books.length === 0 ? (
-              <p className="empty-message">No books uploaded yet.</p>
-            ) : (
-              <div className="books-list">
-                {books.map((book) => (
-                  <div key={book.id} className="book-item">
-                    <div className="book-info">
-                      <h3>{book.title}</h3>
-                      <p>
-                        Sections: {book.sections ? book.sections.length : 0}
-                      </p>
-                    </div>
-                    <div className="book-actions">
-                      <button
-                        className="view-btn"
-                        onClick={() => viewBook(book)}
-                      >
-                        View Details
-                      </button>
-                      <button
-                        className="delete-btn"
-                        onClick={() => deleteBook(book.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+        {/* Book details view */}
+        {selectedBook && (
+          <div className="dashboard-container">
+            <div className="dashboard-card book-details-card">
+              <div className="book-details-header">
+                <button className="back-btn" onClick={closeBookDetails}>
+                  &larr; Back to books
+                </button>
+                <h2>{selectedBook.title}</h2>
               </div>
-            )}
+
+              <div className="book-details">
+                <div className="book-details-row">
+                  <span className="detail-label">PDF:</span>
+                  <a
+                    href={`http://localhost:3000${selectedBook.pdfPath}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="pdf-link"
+                  >
+                    View PDF
+                  </a>
+                </div>
+
+                <div className="book-details-row">
+                  <span className="detail-label">Uploaded:</span>
+                  <span>
+                    {selectedBook.uploadedAt
+                      ? new Date(
+                          selectedBook.uploadedAt.seconds * 1000
+                        ).toLocaleString()
+                      : "N/A"}
+                  </span>
+                </div>
+
+                <div className="sections-header">
+                  <h3>Sections</h3>
+                  {!editingSections ? (
+                    <button className="edit-btn" onClick={startEditingSections}>
+                      Edit Sections
+                    </button>
+                  ) : (
+                    <button
+                      className="save-btn"
+                      onClick={saveEditedSections}
+                      disabled={loading}
+                    >
+                      {loading ? "Saving..." : "Save Changes"}
+                    </button>
+                  )}
+                </div>
+
+                {!editingSections ? (
+                  <div className="sections-list">
+                    {selectedBook.sections &&
+                    selectedBook.sections.length > 0 ? (
+                      <ul>
+                        {selectedBook.sections.map((section, index) => (
+                          <li key={index}>
+                            <span className="section-name">{section.name}</span>
+                            <span className="section-page">
+                              Page {section.page}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>No sections defined</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="sections-container">
+                    {editedSections.map((section, index) => (
+                      <div key={index} className="section-row">
+                        <input
+                          type="text"
+                          value={section.name}
+                          onChange={(e) =>
+                            handleEditedSectionChange(
+                              index,
+                              "name",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Section name"
+                        />
+                        <input
+                          type="number"
+                          value={section.page}
+                          onChange={(e) =>
+                            handleEditedSectionChange(
+                              index,
+                              "page",
+                              e.target.value
+                            )
+                          }
+                          placeholder="Page"
+                          min="1"
+                        />
+                        <button
+                          type="button"
+                          className="remove-btn"
+                          onClick={() => removeEditedSection(index)}
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="add-section-btn"
+                      onClick={addEditedSection}
+                    >
+                      + Add Section
+                    </button>
+                  </div>
+                )}
+
+                <div className="book-actions">
+                  <button
+                    className="delete-btn"
+                    onClick={() => deleteBook(selectedBook.id)}
+                    disabled={loading}
+                  >
+                    Delete Book
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </main>

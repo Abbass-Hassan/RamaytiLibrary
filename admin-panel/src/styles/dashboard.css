@@ -445,3 +445,44 @@
     margin-top: -2.5rem;
   }
 }
+
+/* Add these styles to dashboard.css */
+
+/* Horizontal layout */
+.dashboard-horizontal-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Equal width columns */
+  gap: 2rem;
+  width: 100%;
+}
+
+/* Adjust cards for the horizontal layout */
+.dashboard-horizontal-layout .dashboard-card {
+  margin-bottom: 0;
+}
+
+.books-card {
+  max-height: 700px; /* Limit height to prevent excessive scrolling */
+  overflow-y: auto; /* Add scrolling for many books */
+}
+
+/* Books list styling updates */
+.books-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+/* Responsive behavior */
+@media (max-width: 1024px) {
+  .dashboard-horizontal-layout {
+    grid-template-columns: 1fr; /* Stack vertically on smaller screens */
+    gap: 1.5rem;
+  }
+
+  .books-card {
+    max-height: none;
+  }
+}
