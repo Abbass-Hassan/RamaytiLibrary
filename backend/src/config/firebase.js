@@ -1,36 +1,46 @@
+// backend/src/config/firebase.js
 const admin = require("firebase-admin");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
 
-// Get the absolute path to the service account file
-const serviceAccountPath = path.resolve(
-  __dirname,
-  "firebaseServiceAccount.json"
-);
+let firebaseConfig;
 
 try {
-  // Check if the file exists
-  if (!fs.existsSync(serviceAccountPath)) {
-    console.error(
-      `Service account file does not exist at: ${serviceAccountPath}`
+  // Try to get the service account from environment variable first
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    console.log("Using Firebase service account from environment variable");
+    firebaseConfig = {
+      credential: admin.credential.cert(
+        JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+      ),
+      databaseURL: "https://ramaytilibrary-default-rtdb.firebaseio.com",
+    };
+  } else {
+    // Fall back to reading from file
+    const serviceAccountPath = path.resolve(
+      __dirname,
+      "firebaseServiceAccount.json"
     );
-    process.exit(1);
+    console.log(`Loading service account from: ${serviceAccountPath}`);
+
+    if (!fs.existsSync(serviceAccountPath)) {
+      throw new Error(
+        `Service account file not found at: ${serviceAccountPath}`
+      );
+    }
+
+    firebaseConfig = {
+      credential: admin.credential.cert(require(serviceAccountPath)),
+      databaseURL: "https://ramaytilibrary-default-rtdb.firebaseio.com",
+    };
   }
 
-  console.log(`Loading service account from: ${serviceAccountPath}`);
-  const serviceAccount = require(serviceAccountPath);
-  console.log("Service account loaded successfully");
-
-  // Initialize the app with a service account
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://ramaytilibrary-default-rtdb.firebaseio.com",
-  });
-
+  // Initialize Firebase
+  admin.initializeApp(firebaseConfig);
   console.log("Firebase Admin SDK initialized successfully");
 } catch (error) {
   console.error("Error initializing Firebase Admin SDK:", error);
-  console.error("Service account path:", serviceAccountPath);
+  console.error("Current directory:", process.cwd());
   console.error("__dirname:", __dirname);
   process.exit(1);
 }
