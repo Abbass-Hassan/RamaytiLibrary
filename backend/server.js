@@ -11,6 +11,10 @@ app.use(express.json());
 const bookRoutes = require("./src/routes/bookRoutes");
 app.use("/api/books", bookRoutes);
 
+// Use the admin book routes
+const adminBookRoutes = require("./src/routes/adminBookRoutes");
+app.use("/api/admin/books", adminBookRoutes);
+
 // Use the auth routes
 const authRoutes = require("./src/routes/authRoutes");
 app.use("/api/auth", authRoutes);
