@@ -3,6 +3,42 @@ const admin = require("../config/firebase");
 const db = admin.firestore();
 const fs = require("fs");
 const path = require("path");
+const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
+
+// Helper function to get absolute server URL
+const getServerUrl = () => {
+  return (
+    process.env.SERVER_URL || "http://ramaytilibrary-production.up.railway.app"
+  );
+};
+
+// Extract text from uploaded PDF
+const extractPdfText = async (filePath) => {
+  try {
+    // Create full URL for the PDF
+    const fullUrl = `${getServerUrl()}${filePath}`;
+    console.log("Extracting text from:", fullUrl);
+
+    // Extract text using our enhanced extraction function
+    const textContent = await extractTextFromPdfUrlWithPdfJs(fullUrl);
+
+    // Split text into pages
+    const pages = textContent.split("\f").filter((page) => page.trim() !== "");
+
+    console.log(`Extracted ${pages.length} pages of content`);
+    return {
+      success: true,
+      totalPages: pages.length,
+      content: pages,
+    };
+  } catch (error) {
+    console.error("PDF text extraction error:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
 
 // Upload a new book
 exports.uploadBook = async (req, res) => {
@@ -39,25 +75,65 @@ exports.uploadBook = async (req, res) => {
     const fileName = req.file.filename;
     const filePath = `/files/${fileName}`;
 
-    // Add book to Firestore
+    // Add book to Firestore - initially without extracted content
     const bookData = {
       title,
       pdfPath: filePath,
       fileName,
       uploadedAt: admin.firestore.FieldValue.serverTimestamp(),
       sections: parsedSections || [],
+      extractionStatus: "pending",
     };
 
     const bookRef = await db.collection("books").add(bookData);
+    const bookId = bookRef.id;
 
+    // Start text extraction in the background
+    console.log(`Starting PDF extraction for book ID: ${bookId}`);
+
+    // Send response immediately so the user doesn't have to wait
     res.status(201).json({
       success: true,
-      message: "Book uploaded successfully",
+      message: "Book uploaded successfully. Text extraction in progress.",
       data: {
-        id: bookRef.id,
+        id: bookId,
         ...bookData,
       },
     });
+
+    // Perform text extraction asynchronously
+    try {
+      const extractionResult = await extractPdfText(filePath);
+
+      if (extractionResult.success) {
+        // Store extracted text in Firestore
+        await bookRef.update({
+          extractedContent: extractionResult.content,
+          totalPages: extractionResult.totalPages,
+          extractionStatus: "completed",
+          extractionCompleted: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        console.log(`Text extraction completed for book ID: ${bookId}`);
+      } else {
+        // Store extraction error
+        await bookRef.update({
+          extractionStatus: "failed",
+          extractionError: extractionResult.error,
+        });
+        console.log(
+          `Text extraction failed for book ID: ${bookId}: ${extractionResult.error}`
+        );
+      }
+    } catch (extractionError) {
+      console.error(
+        `Unhandled extraction error for book ID: ${bookId}:`,
+        extractionError
+      );
+      await bookRef.update({
+        extractionStatus: "failed",
+        extractionError: extractionError.message,
+      });
+    }
   } catch (error) {
     console.error("Book upload error:", error);
     res.status(500).json({
