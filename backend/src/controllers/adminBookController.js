@@ -7,6 +7,10 @@ const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
 
 // Helper function to get absolute server URL
 const getServerUrl = () => {
+  // When running locally, use localhost
+  if (process.env.NODE_ENV === "development" || !process.env.SERVER_URL) {
+    return "http://localhost:3000";
+  }
   return (
     process.env.SERVER_URL || "http://ramaytilibrary-production.up.railway.app"
   );
@@ -15,14 +19,32 @@ const getServerUrl = () => {
 // Extract text from uploaded PDF
 const extractPdfText = async (filePath) => {
   try {
-    // Create full URL for the PDF
-    const fullUrl = `${getServerUrl()}${filePath}`;
-    console.log("Extracting text from:", fullUrl);
+    // Check if file exists before attempting extraction
+    const localFilePath = path.join(__dirname, "../../public", filePath);
+    if (!fs.existsSync(localFilePath)) {
+      console.error(`File not found at: ${localFilePath}`);
+      return {
+        success: false,
+        error: "PDF file not found on server",
+      };
+    }
+
+    // For local development, use direct file path instead of HTTP
+    let pdfSource;
+    if (process.env.NODE_ENV === "development" || !process.env.SERVER_URL) {
+      // Direct file access when running locally
+      pdfSource = `file://${localFilePath}`;
+      console.log("Using direct file access:", pdfSource);
+    } else {
+      // HTTP access when in production
+      pdfSource = `${getServerUrl()}${filePath}`;
+      console.log("Using HTTP access:", pdfSource);
+    }
 
     // Extract text using our enhanced extraction function
-    const textContent = await extractTextFromPdfUrlWithPdfJs(fullUrl);
+    const textContent = await extractTextFromPdfUrlWithPdfJs(pdfSource);
 
-    // Split text into pages
+    // Split text by form feed character to get pages
     const pages = textContent.split("\f").filter((page) => page.trim() !== "");
 
     console.log(`Extracted ${pages.length} pages of content`);

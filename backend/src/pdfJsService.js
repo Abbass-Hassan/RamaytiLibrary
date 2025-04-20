@@ -7,6 +7,7 @@
 
 const axios = require("axios");
 const pdfjsLib = require("pdfjs-dist/legacy/build/pdf");
+const fs = require("fs");
 
 // Disable workers for Node.js environment
 pdfjsLib.GlobalWorkerOptions.disableWorker = true;
@@ -365,33 +366,56 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
       throw new Error("PDF URL is undefined or null");
     }
 
-    // Ensure the URL is absolute and properly formatted
-    if (pdfUrl.startsWith("/files/")) {
-      const serverUrl =
-        process.env.SERVER_URL ||
-        "http://ramaytilibrary-production.up.railway.app";
-      pdfUrl = `${serverUrl}${pdfUrl}`;
-      console.log("Using absolute URL for local file in extraction:", pdfUrl);
+    let data;
+
+    // Handle file:// protocol for direct file access
+    if (pdfUrl.startsWith("file://")) {
+      const filePath = pdfUrl.replace("file://", "");
+      console.log(`Reading PDF directly from file system: ${filePath}`);
+
+      try {
+        data = new Uint8Array(fs.readFileSync(filePath));
+        console.log(`Read PDF: ${data.length} bytes`);
+      } catch (fileError) {
+        console.error("Error reading local PDF file:", fileError);
+        throw new Error(`Failed to read PDF file: ${fileError.message}`);
+      }
+    } else {
+      // Ensure the URL is absolute and properly formatted
+      if (pdfUrl.startsWith("/files/")) {
+        const serverUrl =
+          process.env.SERVER_URL ||
+          "http://ramaytilibrary-production.up.railway.app";
+        pdfUrl = `${serverUrl}${pdfUrl}`;
+        console.log("Using absolute URL for local file in extraction:", pdfUrl);
+      }
+
+      // Replace any localhost references with the actual server URL
+      if (pdfUrl.includes("localhost") || pdfUrl.includes("::1")) {
+        pdfUrl = pdfUrl.replace(
+          /https?:\/\/(localhost|::1)(:\d+)?/,
+          "http://ramaytilibrary-production.up.railway.app"
+        );
+        console.log("Replaced localhost with production URL:", pdfUrl);
+      }
+
+      console.log(`Starting text extraction from: ${pdfUrl}`);
+
+      try {
+        const response = await axios.get(pdfUrl, {
+          responseType: "arraybuffer",
+          timeout: options.timeout || 30000, // Default timeout 30 sec.
+          validateStatus: (status) => status === 200,
+          ...options.axiosOptions,
+        });
+        data = new Uint8Array(response.data);
+        console.log(`Downloaded PDF: ${data.length} bytes`);
+      } catch (httpError) {
+        console.error("Error downloading PDF:", httpError);
+        throw new Error(`Request failed: ${httpError.message}`);
+      }
     }
 
-    // Replace any localhost references with the actual server URL
-    if (pdfUrl.includes("localhost") || pdfUrl.includes("::1")) {
-      pdfUrl = pdfUrl.replace(
-        /https?:\/\/(localhost|::1)(:\d+)?/,
-        "http://ramaytilibrary-production.up.railway.app"
-      );
-      console.log("Replaced localhost with production URL:", pdfUrl);
-    }
-
-    console.log(`Starting text extraction from: ${pdfUrl}`);
-    const response = await axios.get(pdfUrl, {
-      responseType: "arraybuffer",
-      timeout: options.timeout || 30000, // Default timeout 30 sec.
-      validateStatus: (status) => status === 200,
-      ...options.axiosOptions,
-    });
-    const data = new Uint8Array(response.data);
-    console.log(`Downloaded PDF: ${data.length} bytes`);
     const loadingTask = pdfjsLib.getDocument({
       data: data,
       disableFontFace: false, // Enable font info for extraction
