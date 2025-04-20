@@ -1,3 +1,4 @@
+// backend/src/controllers/bookController.js
 const admin = require("../config/firebase");
 const db = admin.firestore();
 const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
@@ -8,6 +9,15 @@ function cleanAndEncodeUrl(url) {
 
   // First trim the URL
   let cleanUrl = url.trim();
+
+  // Check if it's a local file path from the new admin panel
+  if (cleanUrl.startsWith("/files/")) {
+    // For local files, use the server URL
+    const serverUrl = process.env.SERVER_URL || "http://localhost:5000";
+    cleanUrl = `${serverUrl}${cleanUrl}`;
+    console.log("Using local file path:", cleanUrl);
+    return cleanUrl;
+  }
 
   // Convert GitHub repository URLs to raw URLs
   if (cleanUrl.includes("github.com") && cleanUrl.includes("/blob/")) {
@@ -46,12 +56,23 @@ exports.getAllBooks = async (req, res) => {
     const snapshot = await db.collection("books").get();
     const books = snapshot.docs.map((doc) => {
       const data = doc.data();
-      if (data.pdfPath && data.pdfPath.includes("localhost")) {
-        data.pdfPath = data.pdfPath.replace(
-          "localhost",
-          "ramaytilibrary-production.up.railway.app"
-        );
+
+      // Handle PDF path formatting
+      if (data.pdfPath) {
+        // If it's a local file path
+        if (data.pdfPath.startsWith("/files/")) {
+          const serverUrl = process.env.SERVER_URL || "http://localhost:5000";
+          data.pdfPath = `${serverUrl}${data.pdfPath}`;
+        }
+        // If it's still using localhost
+        else if (data.pdfPath.includes("localhost")) {
+          data.pdfPath = data.pdfPath.replace(
+            "localhost",
+            "ramaytilibrary-production.up.railway.app"
+          );
+        }
       }
+
       return { id: doc.id, ...data };
     });
     res.json(books);
@@ -72,15 +93,23 @@ exports.getBookById = async (req, res) => {
     }
 
     const data = docSnap.data();
-    if (data.pdfPath && data.pdfPath.includes("localhost")) {
-      data.pdfPath = data.pdfPath.replace(
-        "localhost",
-        "ramaytilibrary-production.up.railway.app"
-      );
-    }
 
-    // Clean and encode URLs in the response
+    // Handle PDF path formatting
     if (data.pdfPath) {
+      // If it's a local file path
+      if (data.pdfPath.startsWith("/files/")) {
+        const serverUrl = process.env.SERVER_URL || "http://localhost:5000";
+        data.pdfPath = `${serverUrl}${data.pdfPath}`;
+      }
+      // If it's still using localhost
+      else if (data.pdfPath.includes("localhost")) {
+        data.pdfPath = data.pdfPath.replace(
+          "localhost",
+          "ramaytilibrary-production.up.railway.app"
+        );
+      }
+
+      // Clean and encode the URL
       data.pdfPath = cleanAndEncodeUrl(data.pdfPath);
     }
 
@@ -132,16 +161,24 @@ exports.redirectToPdf = async (req, res) => {
     const page = section.page;
     let pdfPath = bookData.pdfPath;
 
-    // Clean and format the PDF path
-    if (pdfPath && pdfPath.includes("localhost")) {
-      pdfPath = pdfPath.replace(
-        "localhost",
-        "ramaytilibrary-production.up.railway.app"
-      );
-    }
+    // Handle PDF path formatting
+    if (pdfPath) {
+      // If it's a local file path
+      if (pdfPath.startsWith("/files/")) {
+        const serverUrl = process.env.SERVER_URL || "http://localhost:5000";
+        pdfPath = `${serverUrl}${pdfPath}`;
+      }
+      // If it's still using localhost
+      else if (pdfPath.includes("localhost")) {
+        pdfPath = pdfPath.replace(
+          "localhost",
+          "ramaytilibrary-production.up.railway.app"
+        );
+      }
 
-    // Properly encode the URL
-    pdfPath = cleanAndEncodeUrl(pdfPath);
+      // Properly encode the URL
+      pdfPath = cleanAndEncodeUrl(pdfPath);
+    }
 
     res.redirect(`${pdfPath}#page=${page}`);
   } catch (error) {
@@ -200,7 +237,14 @@ exports.getBookContent = async (req, res) => {
     }
 
     // Format the PDF path
-    if (pdfPath.includes("localhost")) {
+    // If it's a local file path
+    if (pdfPath.startsWith("/files/")) {
+      const serverUrl = process.env.SERVER_URL || "http://localhost:5000";
+      pdfPath = `${serverUrl}${pdfPath}`;
+      console.log("Using local file path:", pdfPath);
+    }
+    // If it's still using localhost
+    else if (pdfPath.includes("localhost")) {
       pdfPath = pdfPath.replace(
         "localhost",
         "ramaytilibrary-production.up.railway.app"
