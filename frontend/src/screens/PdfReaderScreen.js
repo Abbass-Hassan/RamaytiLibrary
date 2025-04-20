@@ -1,3 +1,4 @@
+// frontend/src/screens/PdfReaderScreen.js
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -20,7 +21,10 @@ import {
 import colors from "../config/colors";
 import HighlightedText from "./HighlightedText";
 
-const DirectPdfScreen = ({ route }) => {
+// SERVER_BASE_URL for handling file paths
+const SERVER_BASE_URL = "http://ramaytilibrary-production.up.railway.app";
+
+const PdfReaderScreen = ({ route }) => {
   // Expecting bookId, bookTitle, and optional initial page
   const { bookId, bookTitle, page } = route.params || {};
 
@@ -40,15 +44,59 @@ const DirectPdfScreen = ({ route }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
+  // Helper function to format PDF URLs properly
+  const formatPdfUrl = (url) => {
+    if (!url) return null;
+
+    let formattedUrl = url.trim();
+
+    // Handle /files/ paths (local server files)
+    if (formattedUrl.startsWith("/files/")) {
+      return `${SERVER_BASE_URL}${formattedUrl}`;
+    }
+
+    // Handle GitHub URLs
+    if (
+      formattedUrl.includes("github.com") &&
+      formattedUrl.includes("/blob/")
+    ) {
+      formattedUrl = formattedUrl
+        .replace("github.com", "raw.githubusercontent.com")
+        .replace("/blob/", "/");
+    }
+
+    // Handle GitHub Pages URLs
+    if (formattedUrl.includes("abbass-hassan.github.io")) {
+      const urlParts = formattedUrl.split("/");
+      const filename = urlParts[urlParts.length - 1];
+      const baseUrl = formattedUrl.substring(
+        0,
+        formattedUrl.length - filename.length
+      );
+
+      // Decode first in case it's already encoded, then re-encode properly
+      const decodedFilename = decodeURIComponent(filename);
+      const encodedFilename = encodeURIComponent(decodedFilename);
+
+      // Reconstruct the URL with properly encoded filename
+      formattedUrl = baseUrl + encodedFilename;
+    }
+
+    return formattedUrl;
+  };
+
   // Fetch the PDF path from your backend
   useEffect(() => {
     const fetchBook = async () => {
       try {
-        const response = await fetch(
-          `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`
-        );
+        const response = await fetch(`${SERVER_BASE_URL}/api/books/${bookId}`);
         const data = await response.json();
-        setPdfUrl(data.pdfPath);
+
+        // Format the PDF URL properly
+        const formattedUrl = formatPdfUrl(data.pdfPath);
+        console.log("Formatted PDF URL:", formattedUrl);
+
+        setPdfUrl(formattedUrl);
         setLoading(false);
       } catch (error) {
         console.error("Error fetching PDF info:", error);
@@ -81,7 +129,7 @@ const DirectPdfScreen = ({ route }) => {
     if (!searchText.trim()) return;
     try {
       const response = await fetch(
-        `http://ramaytilibrary-production.up.railway.app/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(
+        `${SERVER_BASE_URL}/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(
           searchText
         )}`
       );
@@ -240,7 +288,7 @@ const DirectPdfScreen = ({ route }) => {
 
       {/* PDF Viewer (load directly from server) */}
       <Pdf
-        source={{ uri: pdfUrl, cache: true }} // <--- Key difference: no RNFetchBlob
+        source={{ uri: pdfUrl, cache: true }}
         page={currentPage}
         onLoadComplete={(pages) => {
           setNumberOfPages(pages);
@@ -264,7 +312,7 @@ const DirectPdfScreen = ({ route }) => {
   );
 };
 
-export default DirectPdfScreen;
+export default PdfReaderScreen;
 
 const styles = StyleSheet.create({
   container: {

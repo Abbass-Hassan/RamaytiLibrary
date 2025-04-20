@@ -364,6 +364,25 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
     if (!pdfUrl) {
       throw new Error("PDF URL is undefined or null");
     }
+
+    // Ensure the URL is absolute and properly formatted
+    if (pdfUrl.startsWith("/files/")) {
+      const serverUrl =
+        process.env.SERVER_URL ||
+        "http://ramaytilibrary-production.up.railway.app";
+      pdfUrl = `${serverUrl}${pdfUrl}`;
+      console.log("Using absolute URL for local file in extraction:", pdfUrl);
+    }
+
+    // Replace any localhost references with the actual server URL
+    if (pdfUrl.includes("localhost") || pdfUrl.includes("::1")) {
+      pdfUrl = pdfUrl.replace(
+        /https?:\/\/(localhost|::1)(:\d+)?/,
+        "http://ramaytilibrary-production.up.railway.app"
+      );
+      console.log("Replaced localhost with production URL:", pdfUrl);
+    }
+
     console.log(`Starting text extraction from: ${pdfUrl}`);
     const response = await axios.get(pdfUrl, {
       responseType: "arraybuffer",

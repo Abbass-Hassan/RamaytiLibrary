@@ -35,10 +35,10 @@ const BooksListScreen = ({ navigation }) => {
 
   const handleBookPress = (book) => {
     if (isDirectTab) {
-      // In DirectTab, go to BookDirectScreen for direct reading
-      navigation.navigate("BookDirectScreen", {
+      navigation.navigate("CustomPdfReader", {
         bookId: book.id,
         bookTitle: book.title,
+        page: 1,
       });
     } else {
       // In other tabs (like SectionsTab), go to SectionsScreen
