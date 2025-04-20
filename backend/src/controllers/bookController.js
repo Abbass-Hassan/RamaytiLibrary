@@ -1,4 +1,167 @@
-// Update bookController.js - only changing the getBookContent function
+// backend/src/controllers/bookController.js
+const admin = require("../config/firebase");
+const db = admin.firestore();
+const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
+
+// Helper function to clean and properly encode URLs
+function cleanAndEncodeUrl(url) {
+  if (!url) return null;
+
+  // First trim the URL
+  let cleanUrl = url.trim();
+
+  // Check if it's a local file path from the new admin panel
+  if (cleanUrl.startsWith("/files/")) {
+    // For local files, use the server URL
+    const serverUrl =
+      process.env.SERVER_URL ||
+      "http://ramaytilibrary-production.up.railway.app";
+    cleanUrl = `${serverUrl}${cleanUrl}`;
+    console.log("Using local file path:", cleanUrl);
+    return cleanUrl;
+  }
+
+  // Convert GitHub repository URLs to raw URLs
+  if (cleanUrl.includes("github.com") && cleanUrl.includes("/blob/")) {
+    // For GitHub blob URLs
+    cleanUrl = cleanUrl
+      .replace("github.com", "raw.githubusercontent.com")
+      .replace("/blob/", "/");
+    console.log("Converted GitHub URL to raw URL:", cleanUrl);
+  }
+
+  // Handle GitHub Pages URLs
+  if (cleanUrl.includes("abbass-hassan.github.io")) {
+    try {
+      // Parse the URL to separate the base URL from the filename
+      const urlParts = cleanUrl.split("/");
+      const filename = urlParts[urlParts.length - 1];
+      const baseUrl = cleanUrl.substring(0, cleanUrl.length - filename.length);
+
+      // Decode first in case it's already encoded, then re-encode properly
+      const decodedFilename = decodeURIComponent(filename);
+      const encodedFilename = encodeURIComponent(decodedFilename);
+
+      // Reconstruct the URL with properly encoded filename
+      cleanUrl = baseUrl + encodedFilename;
+      console.log("Encoded URL:", cleanUrl);
+    } catch (e) {
+      console.error("Error processing URL encoding:", e);
+    }
+  }
+
+  return cleanUrl;
+}
+
+exports.getAllBooks = async (req, res) => {
+  try {
+    const snapshot = await db.collection("books").get();
+    const books = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      if (data.pdfPath && data.pdfPath.includes("localhost")) {
+        data.pdfPath = data.pdfPath.replace(
+          "localhost",
+          "ramaytilibrary-production.up.railway.app"
+        );
+      }
+      return { id: doc.id, ...data };
+    });
+    res.json(books);
+  } catch (error) {
+    console.error("Error fetching books:", error);
+    res.status(500).json({ error: "Failed to get books" });
+  }
+};
+
+exports.getBookById = async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const docRef = db.collection("books").doc(bookId);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "Book not found" });
+    }
+
+    const data = docSnap.data();
+    if (data.pdfPath && data.pdfPath.includes("localhost")) {
+      data.pdfPath = data.pdfPath.replace(
+        "localhost",
+        "ramaytilibrary-production.up.railway.app"
+      );
+    }
+
+    // Clean and encode URLs in the response
+    if (data.pdfPath) {
+      data.pdfPath = cleanAndEncodeUrl(data.pdfPath);
+    }
+
+    res.json({ id: docSnap.id, ...data });
+  } catch (error) {
+    console.error("Error fetching book:", error);
+    res.status(500).json({ error: "Failed to get book" });
+  }
+};
+
+exports.getBookSections = async (req, res) => {
+  try {
+    const { bookId } = req.params;
+    const docRef = db.collection("books").doc(bookId);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "Book not found" });
+    }
+
+    const bookData = docSnap.data();
+    const sections = bookData.sections || [];
+    res.json(sections);
+  } catch (error) {
+    console.error("Error fetching sections:", error);
+    res.status(500).json({ error: "Failed to get sections" });
+  }
+};
+
+exports.redirectToPdf = async (req, res) => {
+  try {
+    const { bookId, sectionIndex } = req.params;
+    const docRef = db.collection("books").doc(bookId);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: "Book not found" });
+    }
+
+    const bookData = docSnap.data();
+    const sections = bookData.sections || [];
+    const index = parseInt(sectionIndex, 10);
+
+    if (index < 0 || index >= sections.length) {
+      return res.status(404).json({ error: "Section not found" });
+    }
+
+    const section = sections[index];
+    const page = section.page;
+    let pdfPath = bookData.pdfPath;
+
+    // Clean and format the PDF path
+    if (pdfPath && pdfPath.includes("localhost")) {
+      pdfPath = pdfPath.replace(
+        "localhost",
+        "ramaytilibrary-production.up.railway.app"
+      );
+    }
+
+    // Properly encode the URL
+    pdfPath = cleanAndEncodeUrl(pdfPath);
+
+    res.redirect(`${pdfPath}#page=${page}`);
+  } catch (error) {
+    console.error("Error redirecting to PDF:", error);
+    res.status(500).json({ error: "Failed to redirect to PDF" });
+  }
+};
+
 exports.getBookContent = async (req, res) => {
   try {
     const { bookId } = req.params;
