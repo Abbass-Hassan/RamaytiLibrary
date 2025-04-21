@@ -442,12 +442,27 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
           includeMarkedContent: true,
         });
         const pageText = processArabicContent(textContent);
-        fullText += (fullText ? "\n\n" : "") + pageText;
+
+        // Add form feed character (\f) after each page except the last one
+        // This is the key change to preserve page breaks properly
+        if (i < pdf.numPages) {
+          fullText += pageText + "\f";
+        } else {
+          fullText += pageText;
+        }
+
         console.log(`Processed page ${i}/${pdf.numPages}`);
       } catch (pageError) {
         errorCount++;
         console.error(`Error extracting text from page ${i}:`, pageError);
-        fullText += (fullText ? "\n\n" : "") + `[Error extracting page ${i}]`;
+
+        // Also add form feed after error messages for proper page handling
+        if (i < pdf.numPages) {
+          fullText += `[Error extracting page ${i}]\f`;
+        } else {
+          fullText += `[Error extracting page ${i}]`;
+        }
+
         if (errorCount > 5) {
           console.error("Too many extraction errors, aborting further pages.");
           break;

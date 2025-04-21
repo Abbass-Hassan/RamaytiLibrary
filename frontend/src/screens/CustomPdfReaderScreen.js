@@ -108,59 +108,78 @@ const CustomPdfReaderScreen = ({ route }) => {
     return () => unsubscribe();
   }, []);
 
-  // Helper function to fetch fresh content from server
+  // Update the fetchFreshContent function in CustomPdfReaderScreen.js to remove AbortSignal.timeout
+
   const fetchFreshContent = async (effectiveBookId) => {
-    // First check if we're online before attempting fetch
-    const networkState = await NetInfo.fetch();
-    if (!networkState.isConnected) {
-      console.log("Not fetching fresh content - device is offline");
-      return;
-    }
-
     try {
-      const url = `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
-      console.log("Fetching fresh content from URL:", url);
-
-      const response = await fetch(url, {
-        // Add a timeout to the fetch to prevent long-hanging requests
-        signal: AbortSignal.timeout(10000), // 10 second timeout
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server responded with status code ${response.status}`);
+      // First check if we're online before attempting fetch
+      const networkState = await NetInfo.fetch();
+      if (!networkState.isConnected) {
+        console.log("Not fetching fresh content - device is offline");
+        return;
       }
 
-      const data = await response.json();
-      console.log("Received data:", data);
+      try {
+        const url = `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
+        console.log("Fetching fresh content from URL:", url);
 
-      // Save to local storage cache
-      await saveBookContent(effectiveBookId, data.content);
+        // Create a manual timeout with AbortController instead of using AbortSignal.timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-      // Only update state if we're not already showing cached content
-      // or if we're using cache but now got fresh content
-      if (loading || isUsingCache) {
-        setBookContent(data.content);
-        setNumberOfPages(data.content.length);
+        const response = await fetch(url, {
+          signal: controller.signal,
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+          },
+        });
 
-        // Check if content is Arabic
-        if (data.content && data.content.length > 0) {
-          const isArabic = containsArabic(data.content[0]);
-          setIsArabicContent(isArabic);
-          console.log("Content is Arabic:", isArabic);
+        // Clear the timeout since the request completed
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(
+            `Server responded with status code ${response.status}`
+          );
         }
 
-        setLoading(false);
-        setIsUsingCache(false);
+        const data = await response.json();
+        console.log("Received data:", data);
+
+        // Save to local storage cache if you're using caching
+        if (typeof saveBookContent === "function") {
+          await saveBookContent(effectiveBookId, data.content);
+        }
+
+        // Only update state if we're not already showing cached content
+        // or if we're using cache but now got fresh content
+        if (loading || isUsingCache) {
+          setBookContent(data.content);
+          setNumberOfPages(data.content.length);
+
+          // Check if content is Arabic
+          if (data.content && data.content.length > 0) {
+            const isArabic = containsArabic(data.content[0]);
+            setIsArabicContent(isArabic);
+            console.log("Content is Arabic:", isArabic);
+          }
+
+          setLoading(false);
+          setIsUsingCache(false);
+        }
+      } catch (error) {
+        console.error("Error fetching fresh content:", error);
+        // Only show error if we haven't already loaded from cache
+        if (loading) {
+          setError(error.message);
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error("Error fetching fresh content:", error);
-      // Only show error if we haven't already loaded from cache
-      if (loading) {
-        setError(error.message);
-        setLoading(false);
-      }
-      // If we're already showing cached content, just log the error
-      // and continue showing cached content without interrupting the user
+    } catch (generalError) {
+      console.error("General error in fetchFreshContent:", generalError);
     }
   };
 
