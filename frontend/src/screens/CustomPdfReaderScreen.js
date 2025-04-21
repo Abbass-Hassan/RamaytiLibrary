@@ -19,10 +19,52 @@ import {
 } from "../services/bookmarkService";
 import colors from "../config/colors";
 import HighlightedText from "./HighlightedText";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from "@react-native-community/netinfo";
 
 // Helper function to detect if text contains Arabic characters
 const containsArabic = (text) => {
   return /[\u0600-\u06FF]/.test(text);
+};
+
+// Cache management functions
+const saveBookContent = async (bookId, content) => {
+  try {
+    const contentKey = `book_content_${bookId}`;
+    await AsyncStorage.setItem(
+      contentKey,
+      JSON.stringify({
+        timestamp: Date.now(),
+        content: content,
+      })
+    );
+    console.log(`Saved content for book ${bookId} to local storage`);
+    return true;
+  } catch (error) {
+    console.error("Error saving book content to storage:", error);
+    return false;
+  }
+};
+
+const getBookContent = async (bookId) => {
+  try {
+    const contentKey = `book_content_${bookId}`;
+    const storedData = await AsyncStorage.getItem(contentKey);
+
+    if (storedData) {
+      const parsedData = JSON.parse(storedData);
+      console.log(
+        `Retrieved cached content for book ${bookId}, stored at ${new Date(
+          parsedData.timestamp
+        )}`
+      );
+      return parsedData.content;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error getting book content from storage:", error);
+    return null;
+  }
 };
 
 const CustomPdfReaderScreen = ({ route }) => {
@@ -34,6 +76,8 @@ const CustomPdfReaderScreen = ({ route }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isArabicContent, setIsArabicContent] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [isUsingCache, setIsUsingCache] = useState(false);
 
   // Page tracking
   const [numberOfPages, setNumberOfPages] = useState(1);
@@ -53,7 +97,74 @@ const CustomPdfReaderScreen = ({ route }) => {
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  // Fetch the book content from your backend
+  // Set up network connectivity monitoring
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      console.log("Network connection state:", state.isConnected);
+      setIsOffline(!state.isConnected);
+    });
+
+    // Clean up listener on unmount
+    return () => unsubscribe();
+  }, []);
+
+  // Helper function to fetch fresh content from server
+  const fetchFreshContent = async (effectiveBookId) => {
+    // First check if we're online before attempting fetch
+    const networkState = await NetInfo.fetch();
+    if (!networkState.isConnected) {
+      console.log("Not fetching fresh content - device is offline");
+      return;
+    }
+
+    try {
+      const url = `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
+      console.log("Fetching fresh content from URL:", url);
+
+      const response = await fetch(url, {
+        // Add a timeout to the fetch to prevent long-hanging requests
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status code ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Received data:", data);
+
+      // Save to local storage cache
+      await saveBookContent(effectiveBookId, data.content);
+
+      // Only update state if we're not already showing cached content
+      // or if we're using cache but now got fresh content
+      if (loading || isUsingCache) {
+        setBookContent(data.content);
+        setNumberOfPages(data.content.length);
+
+        // Check if content is Arabic
+        if (data.content && data.content.length > 0) {
+          const isArabic = containsArabic(data.content[0]);
+          setIsArabicContent(isArabic);
+          console.log("Content is Arabic:", isArabic);
+        }
+
+        setLoading(false);
+        setIsUsingCache(false);
+      }
+    } catch (error) {
+      console.error("Error fetching fresh content:", error);
+      // Only show error if we haven't already loaded from cache
+      if (loading) {
+        setError(error.message);
+        setLoading(false);
+      }
+      // If we're already showing cached content, just log the error
+      // and continue showing cached content without interrupting the user
+    }
+  };
+
+  // Fetch the book content from your backend or cache
   useEffect(() => {
     const fetchBookContent = async () => {
       try {
@@ -68,28 +179,52 @@ const CustomPdfReaderScreen = ({ route }) => {
         const effectiveBookId = bookId || "C2qKmMSFbnMRVbdrfAAn"; // Using one of your actual book IDs from the logs
         console.log("Using book ID:", effectiveBookId);
 
-        const url = `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
-        console.log("Fetching URL:", url);
+        // Check if we have the content cached locally
+        const cachedContent = await getBookContent(effectiveBookId);
 
-        const response = await fetch(url);
+        // Check network connection
+        const networkState = await NetInfo.fetch();
+        const isConnected = networkState.isConnected;
+        setIsOffline(!isConnected);
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch: ${response.status}`);
+        if (cachedContent && cachedContent.length > 0) {
+          // Use the cached content if we have it
+          console.log("Using cached book content");
+          setBookContent(cachedContent);
+          setNumberOfPages(cachedContent.length);
+          setIsUsingCache(true);
+
+          // Check if content is Arabic by sampling the first page
+          if (cachedContent && cachedContent.length > 0) {
+            const isArabic = containsArabic(cachedContent[0]);
+            setIsArabicContent(isArabic);
+            console.log("Content is Arabic:", isArabic);
+          }
+
+          setLoading(false);
+
+          // If we're online, fetch fresh content in background to update cache
+          if (isConnected) {
+            console.log("Connected to network, checking for updated content");
+            // Use setTimeout to allow the UI to render first
+            setTimeout(() => {
+              fetchFreshContent(effectiveBookId).catch((err) => {
+                console.log("Background refresh failed silently:", err.message);
+              });
+            }, 2000);
+          }
+          return;
         }
 
-        const data = await response.json();
-        console.log("Received data:", data);
-        setBookContent(data.content);
-        setNumberOfPages(data.content.length);
-
-        // Check if content is Arabic by sampling the first page
-        if (data.content && data.content.length > 0) {
-          const isArabic = containsArabic(data.content[0]);
-          setIsArabicContent(isArabic);
-          console.log("Content is Arabic:", isArabic);
+        // If no cached content and offline, show error
+        if (!isConnected) {
+          throw new Error(
+            "No internet connection and no cached content available"
+          );
         }
 
-        setLoading(false);
+        // Fetch content from server
+        await fetchFreshContent(effectiveBookId);
       } catch (error) {
         console.error("Error fetching book content:", error);
         setError(error.message);
@@ -259,7 +394,13 @@ const CustomPdfReaderScreen = ({ route }) => {
   if (error) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Error loading content: {error}</Text>
+        <Text style={styles.errorText}>Error loading content: {error}</Text>
+        {isOffline && (
+          <Text style={styles.offlineText}>
+            You are currently offline. Please connect to the internet and try
+            again.
+          </Text>
+        )}
       </View>
     );
   }
@@ -306,6 +447,7 @@ const CustomPdfReaderScreen = ({ route }) => {
         <View style={styles.pageInfo}>
           <Text style={styles.pageInfoText}>
             Page {currentPage} of {numberOfPages}
+            {isUsingCache ? " (Cached)" : ""}
           </Text>
         </View>
 
@@ -321,6 +463,13 @@ const CustomPdfReaderScreen = ({ route }) => {
           />
         </TouchableOpacity>
       </View>
+
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline" size={16} color="#FFF" />
+          <Text style={styles.offlineBannerText}>Offline Mode</Text>
+        </View>
+      )}
 
       {/* Search Bar */}
       <View style={styles.searchBarContainer}>
@@ -556,6 +705,30 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  errorText: {
+    color: "red",
+    textAlign: "center",
+    marginBottom: 10,
+    paddingHorizontal: 20,
+  },
+  offlineText: {
+    marginTop: 10,
+    textAlign: "center",
+    color: "#666",
+    paddingHorizontal: 20,
+  },
+  offlineBanner: {
+    backgroundColor: "#ff9800",
+    padding: 6,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  offlineBannerText: {
+    color: "#fff",
+    fontWeight: "bold",
+    marginLeft: 8,
   },
   navBar: {
     flexDirection: "row",

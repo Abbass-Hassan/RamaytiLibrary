@@ -52,6 +52,30 @@
         }
       }
     },
+    "@react-native-community/netinfo": {
+      "root": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/@react-native-community/netinfo",
+      "name": "@react-native-community/netinfo",
+      "platforms": {
+        "ios": {
+          "podspecPath": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/@react-native-community/netinfo/react-native-netinfo.podspec",
+          "version": "11.4.1",
+          "configurations": [],
+          "scriptPhases": []
+        },
+        "android": {
+          "sourceDir": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/@react-native-community/netinfo/android",
+          "packageImportPath": "import com.reactnativecommunity.netinfo.NetInfoPackage;",
+          "packageInstance": "new NetInfoPackage()",
+          "buildTypes": [],
+          "componentDescriptors": [],
+          "cmakeListsPath": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/@react-native-community/netinfo/android/build/generated/source/codegen/jni/CMakeLists.txt",
+          "cxxModuleCMakeListsModuleName": null,
+          "cxxModuleCMakeListsPath": null,
+          "cxxModuleHeaderName": null,
+          "isPureCxxDependency": false
+        }
+      }
+    },
     "react-native-blob-util": {
       "root": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-blob-util",
       "name": "react-native-blob-util",
@@ -789,7 +813,7 @@
       "appName": "app",
       "packageName": "com.ramaytilibraryapp",
       "applicationId": "com.ramaytilibraryapp",
-      "mainActivity": ".MainActivity",
+      "mainActivity": ".SplashActivity",
       "assets": []
     }
   }
