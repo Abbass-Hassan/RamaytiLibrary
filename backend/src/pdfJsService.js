@@ -429,8 +429,11 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
     });
     const pdf = await loadingTask.promise;
     console.log(`PDF loaded with ${pdf.numPages} pages`);
-    let fullText = "";
+
+    // Create an array to store each page's text content
+    const pagesContent = [];
     let errorCount = 0;
+
     for (let i = 1; i <= pdf.numPages; i++) {
       try {
         const page = await pdf.getPage(i);
@@ -443,25 +446,15 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
         });
         const pageText = processArabicContent(textContent);
 
-        // Add form feed character (\f) after each page except the last one
-        // This is the key change to preserve page breaks properly
-        if (i < pdf.numPages) {
-          fullText += pageText + "\f";
-        } else {
-          fullText += pageText;
-        }
-
+        // Add the processed page text to our pages array instead of building a single string
+        pagesContent.push(pageText);
         console.log(`Processed page ${i}/${pdf.numPages}`);
       } catch (pageError) {
         errorCount++;
         console.error(`Error extracting text from page ${i}:`, pageError);
 
-        // Also add form feed after error messages for proper page handling
-        if (i < pdf.numPages) {
-          fullText += `[Error extracting page ${i}]\f`;
-        } else {
-          fullText += `[Error extracting page ${i}]`;
-        }
+        // Add error message as the content for this page
+        pagesContent.push(`[Error extracting page ${i}]`);
 
         if (errorCount > 5) {
           console.error("Too many extraction errors, aborting further pages.");
@@ -469,7 +462,10 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
         }
       }
     }
-    return fullText;
+
+    // Return the array of page contents directly
+    console.log(`Extraction complete. Extracted ${pagesContent.length} pages.`);
+    return pagesContent.join("\f");
   } catch (error) {
     console.error("Error extracting PDF text with PDF.js:", error);
     throw error;
