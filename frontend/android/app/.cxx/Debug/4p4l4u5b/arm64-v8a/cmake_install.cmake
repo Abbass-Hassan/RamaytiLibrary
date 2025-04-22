@@ -45,6 +45,7 @@ endif()
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
   include("/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/.cxx/Debug/4p4l4u5b/arm64-v8a/rnasyncstorage_autolinked_build/cmake_install.cmake")
+  include("/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/.cxx/Debug/4p4l4u5b/arm64-v8a/RNCSlider_autolinked_build/cmake_install.cmake")
   include("/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/.cxx/Debug/4p4l4u5b/arm64-v8a/ReactNativeBlobUtilSpec_autolinked_build/cmake_install.cmake")
   include("/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/.cxx/Debug/4p4l4u5b/arm64-v8a/rngesturehandler_codegen_autolinked_build/cmake_install.cmake")
   include("/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/.cxx/Debug/4p4l4u5b/arm64-v8a/RNLocalizeSpec_autolinked_build/cmake_install.cmake")

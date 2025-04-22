@@ -22,5 +22,23 @@
   "searching": "جاري البحث",
   "filterBooks": "تصفية الكتب...",
   "noBooksFound": "لا توجد كتب مطابقة",
-  "booksSelected": "كتب مختارة"
+  "booksSelected": "كتب مختارة",
+
+  "multiplePages": "صفحات متعددة",
+  "sectionTest": "قسم الاختبار",
+  "article": "مقال",
+  "searchInBook": "بحث في الكتاب",
+  "settings": "إعدادات",
+  "bookmark": "إضافة للمفضلة",
+  "of": "من",
+  "textSize": "حجم النص",
+  "textColor": "لون النص",
+  "background": "الخلفية",
+  "close": "إغلاق",
+  "offlineMode": "وضع عدم الاتصال",
+  "cached": "محفوظ محليًا",
+  "noContent": "لا يوجد محتوى متاح لهذا الكتاب",
+  "errorLoading": "خطأ في تحميل المحتوى",
+  "noInternet": "أنت غير متصل بالإنترنت. يرجى الاتصال وإعادة المحاولة",
+  "readerSettings": "إعدادات القارئ"
 }

@@ -5,6 +5,8 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 
 // Import the custom Icon component
@@ -13,15 +15,25 @@ import Icon from "../components/Icon";
 // Import colors
 import colors from "../config/colors";
 
-const SectionsScreen = ({ navigation }) => {
+const SectionsScreen = ({ navigation, route }) => {
   const [books, setBooks] = useState([]);
   const [expandedBookId, setExpandedBookId] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Check if a specific bookId was passed to the screen
+  const { bookId: initialBookId } = route.params || {};
 
   const fetchBooks = async () => {
     try {
+      setLoading(true);
       const response = await fetch(
         "http://ramaytilibrary-production.up.railway.app/api/books"
       );
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status code ${response.status}`);
+      }
+
       const data = await response.json();
 
       // Initialize books with empty sections arrays
@@ -32,8 +44,17 @@ const SectionsScreen = ({ navigation }) => {
       }));
 
       setBooks(booksWithSections);
+
+      // If we have an initial bookId, expand it automatically
+      if (initialBookId) {
+        setExpandedBookId(initialBookId);
+      }
+
+      setLoading(false);
     } catch (error) {
       console.log("Error fetching books:", error);
+      Alert.alert("Error", "Failed to load books. Please try again.");
+      setLoading(false);
     }
   };
 
@@ -49,6 +70,11 @@ const SectionsScreen = ({ navigation }) => {
       const response = await fetch(
         `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}/sections`
       );
+
+      if (!response.ok) {
+        throw new Error(`Server responded with status code ${response.status}`);
+      }
+
       const sectionsData = await response.json();
 
       // Update the book with its sections
@@ -62,6 +88,7 @@ const SectionsScreen = ({ navigation }) => {
       setBooks(updatedBooks);
     } catch (error) {
       console.log(`Error fetching sections for book ${bookId}:`, error);
+      Alert.alert("Error", "Failed to load sections. Please try again.");
     }
   };
 
@@ -78,6 +105,17 @@ const SectionsScreen = ({ navigation }) => {
 
   const toggleBookExpansion = (bookId) => {
     setExpandedBookId(expandedBookId === bookId ? null : bookId);
+  };
+
+  const handleSectionPress = (book, sectionIndex) => {
+    const section = book.sections[sectionIndex];
+
+    // Navigate to CustomPdfReader instead of DummyPdfScreen
+    navigation.navigate("CustomPdfReader", {
+      bookId: book.id,
+      bookTitle: book.title,
+      page: section.page || 1,
+    });
   };
 
   const renderBookItem = ({ item }) => {
@@ -104,19 +142,29 @@ const SectionsScreen = ({ navigation }) => {
                 <TouchableOpacity
                   key={index}
                   style={styles.sectionItem}
-                  onPress={() =>
-                    navigation.navigate("DummyPdfScreen", {
-                      bookId: item.id,
-                      sectionIndex: index,
-                    })
-                  }
+                  onPress={() => handleSectionPress(item, index)}
                 >
                   <Text style={styles.sectionName}>{section.name}</Text>
+                  <Text style={styles.sectionPage}>
+                    Page {section.page || "?"}
+                  </Text>
                 </TouchableOpacity>
               ))
             ) : item.sectionsLoaded && item.sections.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No sections available</Text>
+                <TouchableOpacity
+                  style={styles.readFullBookButton}
+                  onPress={() =>
+                    navigation.navigate("CustomPdfReader", {
+                      bookId: item.id,
+                      bookTitle: item.title,
+                      page: 1,
+                    })
+                  }
+                >
+                  <Text style={styles.readFullBookText}>Read Full Book</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.loadingContainer}>
@@ -128,6 +176,15 @@ const SectionsScreen = ({ navigation }) => {
       </View>
     );
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centeredContainer]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading books...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -145,6 +202,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  centeredContainer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   listContainer: {
     paddingVertical: 10,
@@ -182,10 +243,19 @@ const styles = StyleSheet.create({
     paddingLeft: 20,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   sectionName: {
     fontSize: 16,
     color: colors.text,
+    flex: 1,
+  },
+  sectionPage: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginLeft: 8,
   },
   loadingContainer: {
     padding: 15,
@@ -193,6 +263,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: colors.textSecondary,
+    marginTop: 10,
     fontStyle: "italic",
   },
   emptyContainer: {
@@ -201,6 +272,18 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: colors.textSecondary,
+    marginBottom: 10,
+  },
+  readFullBookButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 5,
+  },
+  readFullBookText: {
+    color: "#FFF",
+    fontWeight: "500",
   },
 });
 

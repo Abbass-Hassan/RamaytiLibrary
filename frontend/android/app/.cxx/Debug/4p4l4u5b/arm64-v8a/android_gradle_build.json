@@ -1,6 +1,7 @@
 {
   "buildFiles": [
     "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/@react-native-async-storage/async-storage/android/build/generated/source/codegen/jni/CMakeLists.txt",
+    "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/@react-native-community/slider/android/src/main/jni/CMakeLists.txt",
     "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-blob-util/android/build/generated/source/codegen/jni/CMakeLists.txt",
     "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-gesture-handler/android/build/generated/source/codegen/jni/CMakeLists.txt",
     "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-localize/android/build/generated/source/codegen/jni/CMakeLists.txt",
@@ -33,8 +34,20 @@
       "artifactName": "appmodules",
       "output": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/build/intermediates/cxx/Debug/4p4l4u5b/obj/arm64-v8a/libappmodules.so",
       "runtimeFiles": [
+        "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/build/intermediates/cxx/Debug/4p4l4u5b/obj/arm64-v8a/libreact_codegen_RNCSlider.so",
         "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/build/intermediates/cxx/Debug/4p4l4u5b/obj/arm64-v8a/libreact_codegen_safeareacontext.so",
         "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/build/intermediates/cxx/Debug/4p4l4u5b/obj/arm64-v8a/libreact_codegen_rnscreens.so",
+        "/Users/abbasshassan/.gradle/caches/8.12/transforms/bbbd7faada6db350ac59925f93ab342e/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
+        "/Users/abbasshassan/.gradle/caches/8.12/transforms/9f8e25feabbe8b0b7a3e83fbd347083e/transformed/react-android-0.78.0-debug/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
+        "/Users/abbasshassan/.gradle/caches/8.12/transforms/9f8e25feabbe8b0b7a3e83fbd347083e/transformed/react-android-0.78.0-debug/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so"
+      ]
+    },
+    "react_codegen_RNCSlider::@4898bc4726ecf1751b6a": {
+      "toolchain": "toolchain",
+      "abi": "arm64-v8a",
+      "artifactName": "react_codegen_RNCSlider",
+      "output": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/android/app/build/intermediates/cxx/Debug/4p4l4u5b/obj/arm64-v8a/libreact_codegen_RNCSlider.so",
+      "runtimeFiles": [
         "/Users/abbasshassan/.gradle/caches/8.12/transforms/bbbd7faada6db350ac59925f93ab342e/transformed/fbjni-0.7.0/prefab/modules/fbjni/libs/android.arm64-v8a/libfbjni.so",
         "/Users/abbasshassan/.gradle/caches/8.12/transforms/9f8e25feabbe8b0b7a3e83fbd347083e/transformed/react-android-0.78.0-debug/prefab/modules/jsi/libs/android.arm64-v8a/libjsi.so",
         "/Users/abbasshassan/.gradle/caches/8.12/transforms/9f8e25feabbe8b0b7a3e83fbd347083e/transformed/react-android-0.78.0-debug/prefab/modules/reactnative/libs/android.arm64-v8a/libreactnative.so"

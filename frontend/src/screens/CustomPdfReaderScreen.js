@@ -8,10 +8,11 @@ import {
   Alert,
   StyleSheet,
   TextInput,
-  Modal,
   I18nManager,
+  Dimensions,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { useTranslation } from "react-i18next";
 import {
   getBookmarks,
   saveBookmark,
@@ -21,6 +22,7 @@ import colors from "../config/colors";
 import HighlightedText from "./HighlightedText";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
+import Slider from "@react-native-community/slider";
 
 // Helper function to detect if text contains Arabic characters
 const containsArabic = (text) => {
@@ -68,8 +70,10 @@ const getBookContent = async (bookId) => {
 };
 
 const CustomPdfReaderScreen = ({ route }) => {
+  const { t } = useTranslation();
   // Expecting bookId, bookTitle, and optional initial page
   const { bookId, bookTitle, page } = route.params || {};
+  const isRTL = I18nManager.isRTL;
 
   // Content states
   const [bookContent, setBookContent] = useState([]);
@@ -88,6 +92,7 @@ const CustomPdfReaderScreen = ({ route }) => {
 
   // Search states
   const [searchText, setSearchText] = useState("");
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
@@ -95,7 +100,7 @@ const CustomPdfReaderScreen = ({ route }) => {
   const [fontSize, setFontSize] = useState(16);
   const [textColor, setTextColor] = useState("#000000");
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isSettingsVisible, setIsSettingsVisible] = useState(false);
 
   // Set up network connectivity monitoring
   useEffect(() => {
@@ -107,8 +112,6 @@ const CustomPdfReaderScreen = ({ route }) => {
     // Clean up listener on unmount
     return () => unsubscribe();
   }, []);
-
-  // Update the fetchFreshContent function in CustomPdfReaderScreen.js to remove AbortSignal.timeout
 
   const fetchFreshContent = async (effectiveBookId) => {
     try {
@@ -248,7 +251,7 @@ const CustomPdfReaderScreen = ({ route }) => {
         console.error("Error fetching book content:", error);
         setError(error.message);
         setLoading(false);
-        Alert.alert("Error", "Failed to load book content. " + error.message);
+        Alert.alert(t("errorTitle"), t("errorLoading") + ": " + error.message);
       }
     };
 
@@ -317,7 +320,7 @@ const CustomPdfReaderScreen = ({ route }) => {
     if (results.length > 0) {
       jumpToMatch(0, results);
     } else {
-      Alert.alert("Search", "No matches found.");
+      Alert.alert(t("search"), t("noResultsFound"));
     }
   };
 
@@ -352,10 +355,6 @@ const CustomPdfReaderScreen = ({ route }) => {
       if (existing) {
         await removeBookmark(existing.id);
         setIsBookmarked(false);
-        Alert.alert(
-          "Bookmark removed",
-          `Removed bookmark for Page ${currentPage}`
-        );
       } else {
         const bookmark = {
           id: Date.now().toString(),
@@ -366,23 +365,16 @@ const CustomPdfReaderScreen = ({ route }) => {
         };
         await saveBookmark(bookmark);
         setIsBookmarked(true);
-        Alert.alert(
-          "Bookmark added",
-          `Book: ${bookTitle}, Page: ${currentPage}`
-        );
       }
     } catch (error) {
       console.error("Error toggling bookmark:", error);
-      Alert.alert("Error", "Failed to toggle bookmark.");
+      Alert.alert(t("errorTitle"), t("searchFailed"));
     }
   };
 
   const goToPage = (pageNumber) => {
     if (pageNumber < 1 || pageNumber > numberOfPages) {
-      Alert.alert(
-        "Invalid Page",
-        `Please enter a page between 1 and ${numberOfPages}`
-      );
+      Alert.alert(t("errorTitle"), t("invalidPage") + ` (1-${numberOfPages})`);
       return;
     }
     setCurrentPage(pageNumber);
@@ -405,6 +397,7 @@ const CustomPdfReaderScreen = ({ route }) => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>{t("loadingBook")}...</Text>
       </View>
     );
   }
@@ -413,13 +406,10 @@ const CustomPdfReaderScreen = ({ route }) => {
   if (error) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Error loading content: {error}</Text>
-        {isOffline && (
-          <Text style={styles.offlineText}>
-            You are currently offline. Please connect to the internet and try
-            again.
-          </Text>
-        )}
+        <Text style={styles.errorText}>
+          {t("errorLoading")}: {error}
+        </Text>
+        {isOffline && <Text style={styles.offlineText}>{t("noInternet")}</Text>}
       </View>
     );
   }
@@ -428,7 +418,7 @@ const CustomPdfReaderScreen = ({ route }) => {
   if (!bookContent || bookContent.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>No content available for this book.</Text>
+        <Text>{t("noContent")}</Text>
       </View>
     );
   }
@@ -465,8 +455,8 @@ const CustomPdfReaderScreen = ({ route }) => {
 
         <View style={styles.pageInfo}>
           <Text style={styles.pageInfoText}>
-            Page {currentPage} of {numberOfPages}
-            {isUsingCache ? " (Cached)" : ""}
+            {t("page")} {currentPage} {t("of")} {numberOfPages}
+            {isUsingCache ? ` (${t("cached")})` : ""}
           </Text>
         </View>
 
@@ -486,69 +476,23 @@ const CustomPdfReaderScreen = ({ route }) => {
       {isOffline && (
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline" size={16} color="#FFF" />
-          <Text style={styles.offlineBannerText}>Offline Mode</Text>
+          <Text style={styles.offlineBannerText}>{t("offlineMode")}</Text>
         </View>
       )}
 
-      {/* Search Bar */}
-      <View style={styles.searchBarContainer}>
-        <TextInput
-          style={[
-            styles.searchInput,
-            { textAlign: isArabicContent ? "right" : "left" },
-          ]}
-          placeholder="Search in book"
-          placeholderTextColor={colors.textSecondary || "#999"}
-          value={searchText}
-          onChangeText={setSearchText}
-          onSubmitEditing={handleSearch}
-        />
-        {searchResults.length > 0 ? (
-          <View style={styles.arrowsContainer}>
-            <Text style={styles.matchCount}>
-              {currentMatchIndex + 1}/{searchResults.length}
-            </Text>
-            <TouchableOpacity
-              onPress={handlePrevMatch}
-              disabled={currentMatchIndex === 0}
-              style={[
-                styles.arrowButton,
-                currentMatchIndex === 0 && styles.arrowDisabled,
-              ]}
-            >
-              <Ionicons name="chevron-up" size={18} color="#FFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleNextMatch}
-              disabled={currentMatchIndex === searchResults.length - 1}
-              style={[
-                styles.arrowButton,
-                currentMatchIndex === searchResults.length - 1 &&
-                  styles.arrowDisabled,
-              ]}
-            >
-              <Ionicons name="chevron-down" size={18} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-            <Ionicons name="search" size={20} color="#FFF" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Settings and Bookmark Buttons */}
-      <View style={styles.buttonRow}>
+      {/* Controls Toolbar */}
+      <View style={styles.toolbar}>
+        {/* Search Toggle */}
         <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => setShowSettingsModal(true)}
+          style={styles.toolbarButton}
+          onPress={() => setIsSearchVisible(!isSearchVisible)}
         >
-          <Ionicons name="settings-outline" size={22} color="#FFF" />
-          <Text style={styles.actionButtonText}>Settings</Text>
+          <Ionicons name="search" size={22} color="#FFF" />
         </TouchableOpacity>
 
+        {/* Bookmark Toggle */}
         <TouchableOpacity
-          style={styles.actionButton}
+          style={styles.toolbarButton}
           onPress={handleToggleBookmark}
         >
           <Ionicons
@@ -556,9 +500,111 @@ const CustomPdfReaderScreen = ({ route }) => {
             size={22}
             color="#FFF"
           />
-          <Text style={styles.actionButtonText}>Bookmark</Text>
         </TouchableOpacity>
+
+        {/* Font Size Controls */}
+        <TouchableOpacity
+          style={styles.toolbarButton}
+          onPress={() => setFontSize(Math.max(12, fontSize - 2))}
+        >
+          <Ionicons name="text" size={18} color="#FFF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.toolbarButton}
+          onPress={() => setFontSize(Math.min(28, fontSize + 2))}
+        >
+          <Ionicons name="text" size={24} color="#FFF" />
+        </TouchableOpacity>
+
+        {/* Color Schemes */}
+        <View style={styles.colorButtonsContainer}>
+          <TouchableOpacity
+            style={[styles.colorOption, { backgroundColor: "#FFFFFF" }]}
+            onPress={() => {
+              setBackgroundColor("#FFFFFF");
+              setTextColor("#000000");
+            }}
+          />
+          <TouchableOpacity
+            style={[styles.colorOption, { backgroundColor: "#F5F5DC" }]}
+            onPress={() => {
+              setBackgroundColor("#F5F5DC");
+              setTextColor("#333333");
+            }}
+          />
+          <TouchableOpacity
+            style={[styles.colorOption, { backgroundColor: "#222222" }]}
+            onPress={() => {
+              setBackgroundColor("#222222");
+              setTextColor("#FFFFFF");
+            }}
+          />
+        </View>
       </View>
+
+      {/* Search Bar (conditionally rendered) */}
+      {isSearchVisible && (
+        <View style={styles.searchBarContainer}>
+          <TextInput
+            style={[
+              styles.searchInput,
+              { textAlign: isArabicContent ? "right" : "left" },
+            ]}
+            placeholder={t("searchInBook")}
+            placeholderTextColor={colors.textSecondary || "#999"}
+            value={searchText}
+            onChangeText={setSearchText}
+            onSubmitEditing={handleSearch}
+          />
+
+          {searchText ? (
+            <TouchableOpacity
+              style={styles.searchButton}
+              onPress={handleSearch}
+            >
+              <Ionicons name="search" size={20} color="#FFF" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.searchCloseButton}
+              onPress={() => setIsSearchVisible(false)}
+            >
+              <Ionicons name="close" size={20} color="#FFF" />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Search Results Navigation */}
+      {searchResults.length > 0 && (
+        <View style={styles.searchResultsNav}>
+          <Text style={styles.matchCount}>
+            {currentMatchIndex + 1}/{searchResults.length}
+          </Text>
+          <TouchableOpacity
+            onPress={handlePrevMatch}
+            disabled={currentMatchIndex === 0}
+            style={[
+              styles.arrowButton,
+              currentMatchIndex === 0 && styles.arrowDisabled,
+            ]}
+          >
+            <Ionicons name="chevron-up" size={18} color="#FFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleNextMatch}
+            disabled={currentMatchIndex === searchResults.length - 1}
+            style={[
+              styles.arrowButton,
+              currentMatchIndex === searchResults.length - 1 &&
+                styles.arrowDisabled,
+            ]}
+          >
+            <Ionicons name="chevron-down" size={18} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Content Display */}
       <ScrollView
@@ -579,138 +625,6 @@ const CustomPdfReaderScreen = ({ route }) => {
           <Text style={getTextStyle()}>{currentPageContent}</Text>
         )}
       </ScrollView>
-
-      {/* Settings Modal */}
-      <Modal
-        visible={showSettingsModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowSettingsModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Reader Settings</Text>
-
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Text Size:</Text>
-              <View style={styles.settingControls}>
-                <TouchableOpacity
-                  style={styles.settingButton}
-                  onPress={() => setFontSize(Math.max(10, fontSize - 2))}
-                >
-                  <Ionicons name="remove" size={18} color="#FFF" />
-                </TouchableOpacity>
-                <Text style={styles.settingValue}>{fontSize}px</Text>
-                <TouchableOpacity
-                  style={styles.settingButton}
-                  onPress={() => setFontSize(Math.min(32, fontSize + 2))}
-                >
-                  <Ionicons name="add" size={18} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Text Color:</Text>
-              <View style={styles.colorOptions}>
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#000000" },
-                    textColor === "#000000" && styles.colorSelected,
-                  ]}
-                  onPress={() => setTextColor("#000000")}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#4A4A4A" },
-                    textColor === "#4A4A4A" && styles.colorSelected,
-                  ]}
-                  onPress={() => setTextColor("#4A4A4A")}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#0066CC" },
-                    textColor === "#0066CC" && styles.colorSelected,
-                  ]}
-                  onPress={() => setTextColor("#0066CC")}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#663399" },
-                    textColor === "#663399" && styles.colorSelected,
-                  ]}
-                  onPress={() => setTextColor("#663399")}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#006633" },
-                    textColor === "#006633" && styles.colorSelected,
-                  ]}
-                  onPress={() => setTextColor("#006633")}
-                />
-              </View>
-            </View>
-
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Background:</Text>
-              <View style={styles.colorOptions}>
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#FFFFFF" },
-                    backgroundColor === "#FFFFFF" && styles.colorSelected,
-                  ]}
-                  onPress={() => setBackgroundColor("#FFFFFF")}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#F5F5DC" },
-                    backgroundColor === "#F5F5DC" && styles.colorSelected,
-                  ]}
-                  onPress={() => setBackgroundColor("#F5F5DC")}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#E8DDC9" },
-                    backgroundColor === "#E8DDC9" && styles.colorSelected,
-                  ]}
-                  onPress={() => setBackgroundColor("#E8DDC9")}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#222222" },
-                    backgroundColor === "#222222" && styles.colorSelected,
-                  ]}
-                  onPress={() => setBackgroundColor("#222222")}
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.colorOption,
-                    { backgroundColor: "#121212" },
-                    backgroundColor === "#121212" && styles.colorSelected,
-                  ]}
-                  onPress={() => setBackgroundColor("#121212")}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowSettingsModal(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -724,6 +638,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: colors.text,
   },
   errorText: {
     color: "red",
@@ -739,7 +658,7 @@ const styles = StyleSheet.create({
   },
   offlineBanner: {
     backgroundColor: "#ff9800",
-    padding: 6,
+    padding: 4,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
@@ -748,35 +667,62 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     marginLeft: 8,
+    fontSize: 12,
   },
   navBar: {
     flexDirection: "row",
     backgroundColor: colors.primary || "#2196F3",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     alignItems: "center",
     justifyContent: "space-between",
   },
   navButton: {
-    padding: 8,
+    padding: 6,
   },
   pageInfo: {
     backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
   },
   pageInfoText: {
     color: "#FFF",
-    fontSize: 14,
+    fontSize: 13,
+  },
+  toolbar: {
+    flexDirection: "row",
+    backgroundColor: colors.primary || "#2196F3",
+    paddingHorizontal: 10,
+    paddingBottom: 8,
+    paddingTop: 0,
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  toolbarButton: {
+    padding: 6,
+    borderRadius: 4,
+  },
+  colorButtonsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  colorOption: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginHorizontal: 3,
+    borderWidth: 1,
+    borderColor: "#FFF",
   },
   searchBarContainer: {
     flexDirection: "row",
     backgroundColor: colors.background || "#F5F5F5",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     alignItems: "center",
-    elevation: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: "#DDD",
   },
   searchInput: {
     flex: 1,
@@ -785,59 +731,46 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#CCC",
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     color: colors.text || "#333",
+    fontSize: 14,
   },
-  arrowsContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+  searchButton: {
     marginLeft: 8,
-    backgroundColor: colors.primary || "#2196F3",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: colors.primary,
+    borderRadius: 6,
+    padding: 6,
+  },
+  searchCloseButton: {
+    marginLeft: 8,
+    backgroundColor: "#888",
+    borderRadius: 6,
+    padding: 6,
+  },
+  searchResultsNav: {
+    flexDirection: "row",
+    backgroundColor: colors.background || "#F5F5F5",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    borderBottomWidth: 1,
+    borderBottomColor: "#DDD",
   },
   matchCount: {
-    color: "#FFF",
-    marginRight: 8,
+    color: colors.text,
+    marginRight: 12,
     fontSize: 14,
   },
   arrowButton: {
-    paddingHorizontal: 4,
-    paddingVertical: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
     borderRadius: 4,
-    marginHorizontal: 2,
+    marginHorizontal: 4,
     backgroundColor: colors.primary || "#2196F3",
   },
   arrowDisabled: {
     backgroundColor: "#999",
-  },
-  searchButton: {
-    marginLeft: 8,
-    backgroundColor: colors.primary || "#2196F3",
-    borderRadius: 8,
-    padding: 8,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    backgroundColor: colors.background || "#F5F5F5",
-    justifyContent: "space-around",
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: "#DDD",
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.primary || "#2196F3",
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  actionButtonText: {
-    color: "#FFF",
-    marginLeft: 6,
-    fontSize: 14,
   },
   contentContainer: {
     flex: 1,
@@ -845,81 +778,6 @@ const styles = StyleSheet.create({
   contentInner: {
     padding: 16,
     width: "100%",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    width: "85%",
-    backgroundColor: "#FFF",
-    borderRadius: 10,
-    padding: 20,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 15,
-    textAlign: "center",
-    color: colors.primary || "#2196F3",
-  },
-  settingRow: {
-    marginBottom: 15,
-  },
-  settingLabel: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: "#333",
-  },
-  settingControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  settingButton: {
-    backgroundColor: colors.primary || "#2196F3",
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  settingValue: {
-    marginHorizontal: 15,
-    fontSize: 16,
-    width: 50,
-    textAlign: "center",
-  },
-  colorOptions: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 5,
-  },
-  colorOption: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#DDD",
-  },
-  colorSelected: {
-    borderWidth: 3,
-    borderColor: colors.primary || "#2196F3",
-  },
-  closeButton: {
-    backgroundColor: colors.primary || "#2196F3",
-    borderRadius: 8,
-    paddingVertical: 10,
-    marginTop: 15,
-    alignItems: "center",
-  },
-  closeButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "500",
   },
 });
 
