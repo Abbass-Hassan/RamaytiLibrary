@@ -40,5 +40,22 @@
   "noContent": "لا يوجد محتوى متاح لهذا الكتاب",
   "errorLoading": "خطأ في تحميل المحتوى",
   "noInternet": "أنت غير متصل بالإنترنت. يرجى الاتصال وإعادة المحاولة",
-  "readerSettings": "إعدادات القارئ"
+  "readerSettings": "إعدادات القارئ",
+  "fontSizeSmall": "نص صغير",
+  "fontSizeLarge": "نص كبير",
+  "searchFailed": "فشل البحث",
+  "invalidPage": "صفحة غير صالحة",
+  "increaseFontSize": "زيادة حجم الخط",
+  "decreaseFontSize": "تقليل حجم الخط",
+  "loadingBooks": "جاري تحميل الكتب...",
+  "loadingSections": "جاري تحميل الأقسام...",
+  "loadingBookmarks": "جاري تحميل المفضلة...",
+  "noSectionsAvailable": "لا توجد أقسام متاحة",
+  "readFullBook": "قراءة الكتاب كاملاً",
+  "on": "في",
+  "total": "إجمالي",
+  "offline": "أنت غير متصل بالإنترنت",
+  "checkConnection": "يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى",
+  "retry": "إعادة المحاولة",
+  "serverError": "خطأ في الخادم"
 }

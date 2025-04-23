@@ -20,12 +20,21 @@ import colors from "../config/colors";
 const BookmarksScreen = () => {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
-  const { t } = useTranslation();
-  const isRTL = I18nManager.isRTL || true; // Default to RTL for Arabic
+  const { t, i18n } = useTranslation();
+  const isRTL = I18nManager.isRTL || i18n.language === "ar";
 
   const [bookmarks, setBookmarks] = useState([]);
   const [groupedBookmarks, setGroupedBookmarks] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Format numbers to Arabic digits when in Arabic mode
+  const formatNumber = (num) => {
+    if (!num) return "";
+    if (!isRTL) return String(num);
+
+    const arabicDigits = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+    return String(num).replace(/[0-9]/g, (w) => arabicDigits[+w]);
+  };
 
   // Group bookmarks by book
   const groupBookmarksByBook = (bookmarkList) => {
@@ -103,7 +112,9 @@ const BookmarksScreen = () => {
       activeOpacity={0.7}
     >
       <View style={styles.pageIndicator}>
-        <Text style={styles.pageNumber}>{item.page}</Text>
+        <Text style={styles.pageNumber}>
+          {isRTL ? formatNumber(item.page) : item.page}
+        </Text>
       </View>
 
       <View style={styles.bookmarkDetails}>
@@ -111,7 +122,7 @@ const BookmarksScreen = () => {
           {item.bookTitle}
         </Text>
         <Text style={styles.pageText}>
-          {t("page")} {item.page}
+          {t("page")} {isRTL ? formatNumber(item.page) : item.page}
         </Text>
         {item.note && item.note.trim() !== "" && (
           <Text style={styles.noteText} numberOfLines={2}>
@@ -150,6 +161,7 @@ const BookmarksScreen = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>{t("loadingBookmarks")}</Text>
       </View>
     );
   }
@@ -184,6 +196,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: colors.textSecondary,
   },
   emptyContainer: {
     flex: 1,

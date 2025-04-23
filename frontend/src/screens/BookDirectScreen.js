@@ -1,13 +1,15 @@
 // frontend/src/screens/BookDirectScreen.js
 import React, { useState, useEffect } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import colors from "../config/colors";
 
 const BookDirectScreen = ({ route }) => {
   const { bookId, bookTitle } = route.params || {};
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   useEffect(() => {
     console.log("BookDirectScreen mounted with params:", route.params);
@@ -47,6 +49,7 @@ const BookDirectScreen = ({ route }) => {
   return (
     <View style={styles.loadingContainer}>
       <ActivityIndicator size="large" color={colors.primary} />
+      <Text style={styles.loadingText}>{t("loadingBook")}</Text>
     </View>
   );
 };
@@ -57,6 +60,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.background || "#F5F5F5",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: colors.text,
   },
 });
 

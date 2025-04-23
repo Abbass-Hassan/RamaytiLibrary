@@ -13,11 +13,16 @@ import {
 import colors from "../config/colors";
 import { useRoute } from "@react-navigation/native";
 import NetInfo from "@react-native-community/netinfo";
+import { useTranslation } from "react-i18next";
+import { I18nManager } from "react-native";
 
 // Working API endpoint based on our tests
 const API_URL = "http://ramaytilibrary-production.up.railway.app/api/books";
 
 const BooksListScreen = ({ navigation }) => {
+  const { t, i18n } = useTranslation();
+  const isRTL = I18nManager.isRTL || i18n.language === "ar";
+
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -53,7 +58,7 @@ const BooksListScreen = ({ navigation }) => {
       if (!networkState.isConnected) {
         setIsOffline(true);
         setLoading(false);
-        setError("You are offline. Please check your internet connection.");
+        setError(t("noInternet"));
         return;
       }
 
@@ -70,7 +75,7 @@ const BooksListScreen = ({ navigation }) => {
       });
 
       if (!response.ok) {
-        throw new Error(`Server responded with status: ${response.status}`);
+        throw new Error(`${t("serverError")}: ${response.status}`);
       }
 
       const data = await response.json();
@@ -80,10 +85,7 @@ const BooksListScreen = ({ navigation }) => {
       console.error("Error fetching books:", error.message);
       setError(error.message);
 
-      Alert.alert(
-        "Error Loading Books",
-        `Failed to load books: ${error.message}`
-      );
+      Alert.alert(t("errorTitle"), `${t("errorLoading")}: ${error.message}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -131,7 +133,7 @@ const BooksListScreen = ({ navigation }) => {
     return (
       <View style={styles.centeredContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading books...</Text>
+        <Text style={styles.loadingText}>{t("loadingBooks")}</Text>
       </View>
     );
   }
@@ -139,12 +141,10 @@ const BooksListScreen = ({ navigation }) => {
   if (isOffline) {
     return (
       <View style={styles.centeredContainer}>
-        <Text style={styles.errorText}>You are offline</Text>
-        <Text style={styles.errorSubtext}>
-          Please check your internet connection and try again
-        </Text>
+        <Text style={styles.errorText}>{t("offline")}</Text>
+        <Text style={styles.errorSubtext}>{t("checkConnection")}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchBooks}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={styles.retryButtonText}>{t("retry")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -153,10 +153,10 @@ const BooksListScreen = ({ navigation }) => {
   if (error && books.length === 0) {
     return (
       <View style={styles.centeredContainer}>
-        <Text style={styles.errorText}>Error loading books</Text>
+        <Text style={styles.errorText}>{t("errorLoading")}</Text>
         <Text style={styles.errorSubtext}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={fetchBooks}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={styles.retryButtonText}>{t("retry")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -172,7 +172,7 @@ const BooksListScreen = ({ navigation }) => {
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No books found.</Text>
+          <Text style={styles.emptyText}>{t("noBooksFound")}</Text>
         }
         refreshControl={
           <RefreshControl

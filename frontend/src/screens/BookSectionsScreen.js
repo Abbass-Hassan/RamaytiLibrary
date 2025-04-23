@@ -9,7 +9,9 @@ import {
   Animated,
   ActivityIndicator,
   RefreshControl,
+  I18nManager,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 
 // Import the custom Icon component
 import Icon from "../components/Icon";
@@ -18,6 +20,9 @@ import Icon from "../components/Icon";
 import colors from "../config/colors";
 
 const BookSectionsScreen = ({ navigation }) => {
+  const { t, i18n } = useTranslation();
+  const isRTL = I18nManager.isRTL || i18n.language === "ar";
+
   const [books, setBooks] = useState([]);
   const [expandedBookId, setExpandedBookId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,6 +30,15 @@ const BookSectionsScreen = ({ navigation }) => {
 
   // Animation value for expand/collapse
   const [rotationValues] = useState({});
+
+  // Format numbers to Arabic digits when in Arabic mode
+  const formatNumber = (num) => {
+    if (!num) return "";
+    if (!isRTL) return String(num);
+
+    const arabicDigits = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+    return String(num).replace(/[0-9]/g, (w) => arabicDigits[+w]);
+  };
 
   const fetchBooks = async (showRefreshing = false) => {
     if (showRefreshing) {
@@ -231,7 +245,7 @@ const BookSectionsScreen = ({ navigation }) => {
             {item.sectionsLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color={accentColor} />
-                <Text style={styles.loadingText}>Loading sections...</Text>
+                <Text style={styles.loadingText}>{t("loadingSections")}</Text>
               </View>
             ) : item.sectionsLoaded && item.sections.length > 0 ? (
               item.sections.map((section, index) => (
@@ -247,7 +261,9 @@ const BookSectionsScreen = ({ navigation }) => {
                   }
                 >
                   <View style={styles.sectionInfo}>
-                    <Text style={styles.sectionNumber}>{index + 1}</Text>
+                    <Text style={styles.sectionNumber}>
+                      {isRTL ? formatNumber(index + 1) : index + 1}
+                    </Text>
                     <Text style={styles.sectionName}>{section.name}</Text>
                   </View>
                   <Icon
@@ -264,7 +280,7 @@ const BookSectionsScreen = ({ navigation }) => {
                   size={22}
                   color={colors.textSecondary}
                 />
-                <Text style={styles.emptyText}>No sections available</Text>
+                <Text style={styles.emptyText}>{t("noSectionsAvailable")}</Text>
               </View>
             )}
           </View>
@@ -277,7 +293,7 @@ const BookSectionsScreen = ({ navigation }) => {
     return (
       <View style={styles.loadingScreen}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingScreenText}>Loading books...</Text>
+        <Text style={styles.loadingScreenText}>{t("loadingBooks")}</Text>
       </View>
     );
   }
@@ -299,7 +315,9 @@ const BookSectionsScreen = ({ navigation }) => {
         ListEmptyComponent={
           <View style={styles.emptyListContainer}>
             <Icon name="book" size={40} color={colors.textSecondary} />
-            <Text style={styles.emptyListText}>No books available</Text>
+            <Text style={styles.emptyListText}>
+              {t("noBooksFound") || "No books found"}
+            </Text>
           </View>
         }
       />

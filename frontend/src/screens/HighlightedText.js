@@ -1,36 +1,95 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Text, StyleSheet } from "react-native";
 
 const HighlightedText = ({
   text,
   highlight,
-  textStyle = {},
-  highlightStyle = { backgroundColor: "yellow" },
+  textStyle,
+  highlightStyle,
+  activeHighlightIndex = -1,
+  activeHighlightStyle = {},
 }) => {
-  if (!highlight || !text) return <Text style={textStyle}>{text}</Text>;
+  if (!text || !highlight || !highlight.trim()) {
+    return <Text style={textStyle}>{text}</Text>;
+  }
 
-  // Escape special regex characters in the search term
-  const escapedHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const highlightLC = highlight.toLowerCase();
+  const textLC = text.toLowerCase();
 
-  // Create a regex to match the highlight term (case-insensitive)
-  const regex = new RegExp(`(${escapedHighlight})`, "gi");
+  const parts = [];
+  let lastIndex = 0;
+  let currentHighlightIndex = 0;
 
-  // Split the text into parts based on the regex matches
-  const parts = text.split(regex);
+  // Find all occurrences of highlight in text
+  let index = textLC.indexOf(highlightLC);
+  while (index >= 0) {
+    // Add text before the highlight
+    if (index > lastIndex) {
+      parts.push({
+        text: text.substring(lastIndex, index),
+        highlight: false,
+        key: `part-${lastIndex}`,
+      });
+    }
+
+    // Add highlighted text
+    const isActive = currentHighlightIndex === activeHighlightIndex;
+    parts.push({
+      text: text.substring(index, index + highlight.length),
+      highlight: true,
+      isActive,
+      key: `highlight-${index}`,
+    });
+
+    // Move to next occurrence
+    lastIndex = index + highlight.length;
+    currentHighlightIndex++;
+    index = textLC.indexOf(highlightLC, lastIndex);
+  }
+
+  // Add the remaining text
+  if (lastIndex < text.length) {
+    parts.push({
+      text: text.substring(lastIndex),
+      highlight: false,
+      key: `part-${lastIndex}`,
+    });
+  }
 
   return (
     <Text style={textStyle}>
-      {parts.map((part, index) =>
-        regex.test(part) ? (
-          <Text key={index} style={[textStyle, highlightStyle]}>
-            {part}
-          </Text>
-        ) : (
-          <Text key={index}>{part}</Text>
-        )
-      )}
+      {parts.map((part) => (
+        <Text
+          key={part.key}
+          style={
+            part.highlight
+              ? part.isActive
+                ? [
+                    styles.highlight,
+                    highlightStyle,
+                    styles.activeHighlight,
+                    activeHighlightStyle,
+                  ]
+                : [styles.highlight, highlightStyle]
+              : null
+          }
+        >
+          {part.text}
+        </Text>
+      ))}
     </Text>
   );
 };
+
+const styles = StyleSheet.create({
+  highlight: {
+    backgroundColor: "yellow",
+  },
+  activeHighlight: {
+    backgroundColor: "#4CAF50",
+    color: "#FFFFFF",
+    borderRadius: 3,
+  },
+});
 
 export default HighlightedText;

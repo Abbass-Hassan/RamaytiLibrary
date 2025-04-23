@@ -1,8 +1,11 @@
 import React, { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
+import { useTranslation } from "react-i18next";
+import colors from "../config/colors";
 
 const DummyPdfScreen = ({ route, navigation }) => {
   const { bookId, sectionIndex, bookTitle = "" } = route.params;
+  const { t } = useTranslation();
 
   useEffect(() => {
     console.log("Redirecting from DummyPdfScreen to CustomPdfReader");
@@ -40,8 +43,8 @@ const DummyPdfScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#2196F3" />
-      <Text style={styles.text}>Loading enhanced reader...</Text>
+      <ActivityIndicator size="large" color={colors.primary} />
+      <Text style={styles.text}>{t("loadingBook")}...</Text>
     </View>
   );
 };
@@ -51,12 +54,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F5F5F5",
+    backgroundColor: colors.background || "#F5F5F5",
   },
   text: {
     marginTop: 16,
     fontSize: 16,
-    color: "#333",
+    color: colors.text || "#333",
   },
 });
 

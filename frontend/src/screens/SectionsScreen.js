@@ -7,7 +7,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  I18nManager,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 
 // Import the custom Icon component
 import Icon from "../components/Icon";
@@ -16,12 +18,24 @@ import Icon from "../components/Icon";
 import colors from "../config/colors";
 
 const SectionsScreen = ({ navigation, route }) => {
+  const { t, i18n } = useTranslation();
+  const isRTL = I18nManager.isRTL || i18n.language === "ar";
+
   const [books, setBooks] = useState([]);
   const [expandedBookId, setExpandedBookId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Check if a specific bookId was passed to the screen
   const { bookId: initialBookId } = route.params || {};
+
+  // Format numbers to Arabic digits when in Arabic mode
+  const formatNumber = (num) => {
+    if (!num) return "";
+    if (!isRTL) return String(num);
+
+    const arabicDigits = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+    return String(num).replace(/[0-9]/g, (w) => arabicDigits[+w]);
+  };
 
   const fetchBooks = async () => {
     try {
@@ -146,13 +160,16 @@ const SectionsScreen = ({ navigation, route }) => {
                 >
                   <Text style={styles.sectionName}>{section.name}</Text>
                   <Text style={styles.sectionPage}>
-                    Page {section.page || "?"}
+                    {t("page")}{" "}
+                    {isRTL
+                      ? formatNumber(section.page || "?")
+                      : section.page || "?"}
                   </Text>
                 </TouchableOpacity>
               ))
             ) : item.sectionsLoaded && item.sections.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No sections available</Text>
+                <Text style={styles.emptyText}>{t("noSectionsAvailable")}</Text>
                 <TouchableOpacity
                   style={styles.readFullBookButton}
                   onPress={() =>
@@ -163,12 +180,15 @@ const SectionsScreen = ({ navigation, route }) => {
                     })
                   }
                 >
-                  <Text style={styles.readFullBookText}>Read Full Book</Text>
+                  <Text style={styles.readFullBookText}>
+                    {t("readFullBook")}
+                  </Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Loading sections...</Text>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.loadingText}>{t("loadingSections")}</Text>
               </View>
             )}
           </View>
@@ -181,7 +201,7 @@ const SectionsScreen = ({ navigation, route }) => {
     return (
       <View style={[styles.container, styles.centeredContainer]}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading books...</Text>
+        <Text style={styles.loadingText}>{t("loadingBooks")}</Text>
       </View>
     );
   }
@@ -260,10 +280,13 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: 15,
     alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
   },
   loadingText: {
     color: colors.textSecondary,
     marginTop: 10,
+    marginLeft: 10,
     fontStyle: "italic",
   },
   emptyContainer: {

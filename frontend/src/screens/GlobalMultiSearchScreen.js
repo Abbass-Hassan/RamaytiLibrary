@@ -242,14 +242,18 @@ const GlobalMultiSearchScreen = () => {
     }
   };
 
+  // Only updating the handleResultPress function, rest of file remains the same
+
   const handleResultPress = (result) => {
     // Navigate to CustomPdfReader with the necessary parameters
+    // Pass the searchText to highlight the term on the page
     navigation.navigate("DirectTab", {
       screen: "CustomPdfReader",
       params: {
         bookId: result.bookId,
         bookTitle: result.bookTitle,
         page: result.page,
+        searchTerm: searchText, // Add this line to pass the search term
       },
     });
   };
