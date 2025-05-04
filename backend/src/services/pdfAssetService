@@ -1,0 +1,60 @@
+// backend/src/services/pdfAssetService.js
+// This service maps book IDs to their corresponding asset filenames
+
+const fs = require("fs");
+const path = require("path");
+
+// Map of book IDs to their filenames in the assets folder
+const pdfAssetMap = {};
+
+// Initialize the asset map by reading PDF files from the assets directory
+const initializeAssetMap = () => {
+  try {
+    const assetsPath = path.join(__dirname, "../../public/files");
+    if (!fs.existsSync(assetsPath)) {
+      console.log("Assets directory does not exist, creating it...");
+      fs.mkdirSync(assetsPath, { recursive: true });
+    }
+
+    const files = fs.readdirSync(assetsPath);
+    const pdfFiles = files.filter((file) => file.endsWith(".pdf"));
+
+    console.log(`Found ${pdfFiles.length} PDF files in assets directory`);
+
+    // For now, we'll just store the filenames
+    // Later we can map them to specific book IDs if needed
+    pdfFiles.forEach((file) => {
+      pdfAssetMap[file] = file;
+    });
+
+    return pdfFiles;
+  } catch (error) {
+    console.error("Error initializing asset map:", error);
+    return [];
+  }
+};
+
+// Get the filename for a given book ID
+const getAssetFilenameForBook = (bookId) => {
+  // If we have a direct mapping, use it
+  if (pdfAssetMap[bookId]) {
+    return pdfAssetMap[bookId];
+  }
+
+  // Otherwise, return null
+  return null;
+};
+
+// Get all PDF filenames in the assets directory
+const getAllPdfAssetFilenames = () => {
+  return Object.values(pdfAssetMap);
+};
+
+// Initialize the asset map on module load
+initializeAssetMap();
+
+module.exports = {
+  getAssetFilenameForBook,
+  getAllPdfAssetFilenames,
+  initializeAssetMap,
+};

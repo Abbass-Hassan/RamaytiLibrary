@@ -1,6 +1,7 @@
 // services/pdfStorageService.js
 import RNFS from "react-native-fs";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
+import { hasBundledPdf, getBundledPdfPath } from "./bundledPdfService";
 
 // Cache for storing PDF paths
 const pdfPathCache = {};
@@ -29,7 +30,7 @@ const ensurePdfDirectory = async () => {
 ensurePdfDirectory();
 
 // Get path for a PDF file
-export const getPdfPath = async (bookId) => {
+export const getPdfPath = async (bookId, pdfFilename) => {
   try {
     // Check cache first
     if (pdfPathCache[bookId]) {
@@ -49,8 +50,22 @@ export const getPdfPath = async (bookId) => {
       return localPath;
     }
 
-    // If file doesn't exist locally, return null
-    // (Will need to be handled by copying from assets or downloading)
+    // Check if we have this PDF bundled with the app
+    if (pdfFilename && hasBundledPdf(pdfFilename)) {
+      // Copy from bundled assets to local storage
+      console.log(`PDF found in app bundle: ${pdfFilename}`);
+      const bundledPath = getBundledPdfPath(pdfFilename);
+      const result = await copyBundledPdfToLocal(
+        bookId,
+        bundledPath,
+        pdfFilename
+      );
+      if (result) {
+        return result;
+      }
+    }
+
+    // If not found locally or in bundle, return null (will need to be downloaded)
     return null;
   } catch (error) {
     console.error("Error getting PDF path:", error);
@@ -58,8 +73,8 @@ export const getPdfPath = async (bookId) => {
   }
 };
 
-// Copy a PDF from assets to local storage
-export const copyPdfFromAssets = async (bookId, assetPath) => {
+// Copy a bundled PDF to local storage
+export const copyBundledPdfToLocal = async (bookId, bundledPath, filename) => {
   try {
     await ensurePdfDirectory();
     const destPath = `${PDF_BASE_DIR}book_${bookId}.pdf`;
@@ -71,12 +86,20 @@ export const copyPdfFromAssets = async (bookId, assetPath) => {
       return destPath;
     }
 
-    // Copy from assets
-    await RNFS.copyFileAssets(assetPath, destPath);
+    // Platform-specific copy process
+    if (Platform.OS === "android") {
+      // For Android, copy from assets
+      await RNFS.copyFileAssets(bundledPath, destPath);
+    } else {
+      // For iOS, standard file copy
+      await RNFS.copyFile(bundledPath, destPath);
+    }
+
+    console.log(`Copied bundled PDF to ${destPath}`);
     pdfPathCache[bookId] = destPath;
     return destPath;
   } catch (error) {
-    console.error(`Error copying PDF from assets: ${error}`);
+    console.error(`Error copying bundled PDF: ${error}`);
     return null;
   }
 };
@@ -160,4 +183,13 @@ export const downloadPdfToLocal = async (bookId, url) => {
     console.error(`Error downloading PDF: ${error}`);
     return null;
   }
+};
+
+// Get filename from a URL or path
+export const getFilenameFromPath = (url) => {
+  if (!url) return null;
+
+  // Extract the filename from the URL or path
+  const parts = url.split("/");
+  return parts[parts.length - 1];
 };

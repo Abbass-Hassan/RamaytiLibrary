@@ -2,6 +2,8 @@
 const admin = require("../config/firebase");
 const db = admin.firestore();
 const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
+const path = require("path");
+const fs = require("fs");
 
 // Helper function to clean and properly encode URLs
 function cleanAndEncodeUrl(url) {
@@ -53,6 +55,28 @@ function cleanAndEncodeUrl(url) {
   return cleanUrl;
 }
 
+// Helper function to get the PDF filename from a URL or path
+function getFilenameFromPath(pdfPath) {
+  if (!pdfPath) return null;
+
+  // Extract filename from URL or path
+  const parts = pdfPath.split("/");
+  return parts[parts.length - 1];
+}
+
+// Helper function to check if a PDF exists in the assets directory
+function checkPdfInAssets(filename) {
+  if (!filename) return false;
+
+  try {
+    const assetsPath = path.join(__dirname, "../../public/files", filename);
+    return fs.existsSync(assetsPath);
+  } catch (error) {
+    console.error(`Error checking if PDF exists in assets: ${error}`);
+    return false;
+  }
+}
+
 exports.getAllBooks = async (req, res) => {
   try {
     const snapshot = await db.collection("books").get();
@@ -64,7 +88,17 @@ exports.getAllBooks = async (req, res) => {
           "ramaytilibrary-production.up.railway.app"
         );
       }
-      return { id: doc.id, ...data };
+
+      // Extract filename from pdfPath for asset reference
+      const pdfFilename = getFilenameFromPath(data.pdfPath);
+      const isInAssets = checkPdfInAssets(pdfFilename);
+
+      return {
+        id: doc.id,
+        ...data,
+        pdfFilename,
+        isInAssets,
+      };
     });
     res.json(books);
   } catch (error) {
@@ -96,12 +130,24 @@ exports.getBookById = async (req, res) => {
       data.pdfPath = cleanAndEncodeUrl(data.pdfPath);
     }
 
-    res.json({ id: docSnap.id, ...data });
+    // Extract filename from pdfPath for asset reference
+    const pdfFilename = getFilenameFromPath(data.pdfPath);
+    const isInAssets = checkPdfInAssets(pdfFilename);
+
+    res.json({
+      id: docSnap.id,
+      ...data,
+      pdfFilename,
+      isInAssets,
+    });
   } catch (error) {
     console.error("Error fetching book:", error);
     res.status(500).json({ error: "Failed to get book" });
   }
 };
+
+// Rest of your code remains the same...
+// ...
 
 exports.getBookSections = async (req, res) => {
   try {

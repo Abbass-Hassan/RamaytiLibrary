@@ -12,6 +12,7 @@ import {
   findNodeHandle,
   UIManager,
   Clipboard,
+  Platform,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTranslation } from "react-i18next";
@@ -20,6 +21,12 @@ import {
   saveBookmark,
   removeBookmark,
 } from "../services/bookmarkService";
+import {
+  getPdfPath,
+  downloadPdfToLocal,
+  getFilenameFromPath,
+} from "../services/pdfStorageService";
+import { initializeBundledPdfs } from "../services/bundledPdfService";
 import colors from "../config/colors";
 import HighlightedText from "./HighlightedText";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -29,7 +36,6 @@ const containsArabic = (text) => {
   return /[\u0600-\u06FF]/.test(text);
 };
 
-// Function to convert Western numbers to Eastern Arabic numerals
 const toArabicDigits = (num) => {
   if (num === undefined || num === null) return "";
   const arabicDigits = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
@@ -147,24 +153,19 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
   const [textColor, setTextColor] = useState("#000000");
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
 
-  // Swipe detection variables
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
   const [touchEndX, setTouchEndX] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
   const [isVerticalScrolling, setIsVerticalScrolling] = useState(false);
 
-  // Add useEffect to ensure text and background always have proper contrast
   useEffect(() => {
-    // Check if background is dark and text color is too dark
     if (
       backgroundColor === "#222222" &&
       (textColor === "#000000" || textColor === "#333333")
     ) {
       setTextColor("#FFFFFF");
-    }
-    // Check if background is light and text color is too light
-    else if (
+    } else if (
       (backgroundColor === "#FFFFFF" || backgroundColor === "#F5F5DC") &&
       textColor === "#FFFFFF"
     ) {
@@ -172,12 +173,9 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
     }
   }, [backgroundColor]);
 
-  // Add a focus event listener to reset the book's state when navigating back to it
   useEffect(() => {
     const resetBookState = navigation.addListener("focus", () => {
-      // Check if we're navigating back from another screen
       if (route.params?.resetState) {
-        // Reset to initial state
         setCurrentPage(page || 1);
         setSearchText(searchTerm || "");
         setIsSearchVisible(false);
@@ -321,6 +319,8 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
       try {
         setLoading(true);
 
+        await initializeBundledPdfs();
+
         const effectiveBookId = bookId || "C2qKmMSFbnMRVbdrfAAn";
 
         const cachedContent = await getBookContent(effectiveBookId);
@@ -349,6 +349,52 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
             }, 2000);
           }
           return;
+        }
+
+        let bookData = null;
+        let pdfFilename = null;
+
+        if (isConnected) {
+          try {
+            const response = await fetch(
+              `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}`
+            );
+            if (response.ok) {
+              bookData = await response.json();
+              pdfFilename =
+                bookData.pdfFilename || getFilenameFromPath(bookData.pdfPath);
+            }
+          } catch (error) {
+            console.log("Failed to fetch book details:", error);
+          }
+        }
+
+        const localPdfPath = await getPdfPath(effectiveBookId, pdfFilename);
+
+        if (localPdfPath) {
+          console.log("PDF found locally or in bundle, extracting content...");
+          try {
+            const contentResponse = await fetch(
+              `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`
+            );
+            if (contentResponse.ok) {
+              const data = await contentResponse.json();
+              await saveBookContent(effectiveBookId, data.content);
+
+              setBookContent(data.content);
+              setNumberOfPages(data.content.length);
+
+              if (data.content && data.content.length > 0) {
+                const isArabic = containsArabic(data.content[0]);
+                setIsArabicContent(isArabic);
+              }
+
+              setLoading(false);
+              return;
+            }
+          } catch (error) {
+            console.log("Failed to extract content from local PDF:", error);
+          }
         }
 
         if (!isConnected) {
@@ -551,7 +597,6 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
     }
   };
 
-  // Touch handlers for swipe navigation
   const handleTouchStart = (e) => {
     setTouchStartX(e.nativeEvent.pageX);
     setTouchStartY(e.nativeEvent.pageY);
@@ -562,7 +607,6 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
     const currentY = e.nativeEvent.pageY;
     const verticalDistance = Math.abs(currentY - touchStartY);
 
-    // If vertical scrolling is detected, don't consider this a swipe
     if (verticalDistance > 15) {
       setIsVerticalScrolling(true);
     }
@@ -572,21 +616,18 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
     const currentX = e.nativeEvent.pageX;
     setTouchEndX(currentX);
 
-    // Only process swipe if not scrolling vertically
     if (!isVerticalScrolling) {
       const swipeDistance = touchEndX - touchStartX;
-      const minSwipeDistance = 80; // Minimum swipe distance
+      const minSwipeDistance = 80;
 
       if (Math.abs(swipeDistance) > minSwipeDistance) {
         if (isRTL || isArabicContent) {
-          // RTL: swipe left for previous, right for next
           if (swipeDistance < 0) {
             goToPrevPage();
           } else {
             goToNextPage();
           }
         } else {
-          // LTR: swipe right for previous, left for next
           if (swipeDistance > 0) {
             goToPrevPage();
           } else {

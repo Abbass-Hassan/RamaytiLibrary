@@ -8,6 +8,7 @@ import i18n from "./src/i18n";
 import MainTabs from "./src/navigation/MainTabs";
 import AboutAppScreen from "./src/screens/AboutAppScreen";
 import colors from "./src/config/colors";
+import { initializeBundledPdfs } from "./src/services/bundledPdfService";
 
 const RootStack = createStackNavigator();
 
@@ -27,12 +28,25 @@ export default function App() {
   const [isAppReady, setIsAppReady] = useState(false);
 
   useEffect(() => {
-    // Small delay to ensure native modules are fully initialized
-    const timer = setTimeout(() => {
-      setIsAppReady(true);
-    }, 300);
+    // Initialize app with bundled PDFs
+    const prepareApp = async () => {
+      try {
+        // Initialize the bundled PDFs
+        await initializeBundledPdfs();
 
-    return () => clearTimeout(timer);
+        // Small delay to ensure native modules are fully initialized
+        setTimeout(() => {
+          setIsAppReady(true);
+        }, 300);
+      } catch (error) {
+        console.error("Error during app initialization:", error);
+        setIsAppReady(true); // Continue even if there's an error
+      }
+    };
+
+    prepareApp();
+
+    return () => {}; // Cleanup function
   }, []);
 
   // Show a loading indicator until the app is ready
