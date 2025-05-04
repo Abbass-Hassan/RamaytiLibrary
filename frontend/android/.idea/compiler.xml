@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="CompilerConfiguration">
-    <bytecodeTargetLevel target="17" />
+    <bytecodeTargetLevel target="17">
+      <module name="RamaytiLibraryApp.react-native-async-storage_async-storage" target="21" />
+      <module name="RamaytiLibraryApp.react-native-blob-util" target="21" />
+      <module name="RamaytiLibraryApp.react-native-community_masked-view" target="21" />
+      <module name="RamaytiLibraryApp.react-native-community_netinfo" target="21" />
+      <module name="RamaytiLibraryApp.react-native-community_slider" target="21" />
+      <module name="RamaytiLibraryApp.react-native-fs" target="21" />
+      <module name="RamaytiLibraryApp.react-native-pdf" target="21" />
+      <module name="RamaytiLibraryApp.react-native-reanimated" target="21" />
+      <module name="RamaytiLibraryApp.react-native-vector-icons" target="21" />
+    </bytecodeTargetLevel>
   </component>
 </project>

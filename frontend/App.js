@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { StatusBar, View, ActivityIndicator } from "react-native";
+import { StatusBar, View, ActivityIndicator, Text } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { I18nextProvider } from "react-i18next";
 
 import i18n from "./src/i18n";
 import MainTabs from "./src/navigation/MainTabs";
+import AboutAppScreen from "./src/screens/AboutAppScreen";
 import colors from "./src/config/colors";
 
 const RootStack = createStackNavigator();
@@ -58,8 +59,35 @@ export default function App() {
           barStyle="light-content"
           translucent={false}
         />
-        <RootStack.Navigator screenOptions={{ headerShown: false }}>
-          <RootStack.Screen name="MainTabs" component={MainTabs} />
+        <RootStack.Navigator>
+          <RootStack.Screen
+            name="MainTabs"
+            component={MainTabs}
+            options={{ headerShown: false }}
+            initialParams={{ initialRouteName: "DirectTab" }}
+          />
+          <RootStack.Screen
+            name="AboutApp"
+            component={AboutAppScreen}
+            options={{
+              headerShown: true,
+              headerStyle: { backgroundColor: colors.primary },
+              headerTintColor: colors.card,
+              headerTitleAlign: "center",
+              headerTitle: () => (
+                <Text
+                  style={{
+                    color: colors.card,
+                    fontSize: 18,
+                    fontWeight: "bold",
+                    textAlign: "center",
+                  }}
+                >
+                  حول التطبيق
+                </Text>
+              ),
+            }}
+          />
         </RootStack.Navigator>
       </NavigationContainer>
     </I18nextProvider>

@@ -158,7 +158,7 @@
       "platforms": {
         "ios": {
           "podspecPath": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-gesture-handler/RNGestureHandler.podspec",
-          "version": "2.24.0",
+          "version": "2.25.0",
           "configurations": [],
           "scriptPhases": []
         },
@@ -315,6 +315,25 @@
             "RNSModalScreenComponentDescriptor"
           ],
           "cmakeListsPath": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-screens/android/src/main/jni/CMakeLists.txt",
+          "cxxModuleCMakeListsModuleName": null,
+          "cxxModuleCMakeListsPath": null,
+          "cxxModuleHeaderName": null,
+          "isPureCxxDependency": false
+        }
+      }
+    },
+    "react-native-selectable-text": {
+      "root": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-selectable-text",
+      "name": "react-native-selectable-text",
+      "platforms": {
+        "ios": null,
+        "android": {
+          "sourceDir": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-selectable-text/android",
+          "packageImportPath": "import fi.msand.RNSelectableTextPackage;",
+          "packageInstance": "new RNSelectableTextPackage()",
+          "buildTypes": [],
+          "componentDescriptors": [],
+          "cmakeListsPath": "/Users/abbasshassan/Desktop/RamaytiLibrary/frontend/node_modules/react-native-selectable-text/android/build/generated/source/codegen/jni/CMakeLists.txt",
           "cxxModuleCMakeListsModuleName": null,
           "cxxModuleCMakeListsPath": null,
           "cxxModuleHeaderName": null,
@@ -593,7 +612,8 @@
         },
         {
           "name": "--terminal <string>",
-          "description": "Launches the Metro Bundler in a new window using the specified terminal path."
+          "description": "Launches the Metro Bundler in a new window using the specified terminal path.",
+          "default": "vscode"
         },
         {
           "name": "--binary-path <string>",
@@ -752,7 +772,8 @@
         },
         {
           "name": "--terminal <string>",
-          "description": "Launches the Metro Bundler in a new window using the specified terminal path."
+          "description": "Launches the Metro Bundler in a new window using the specified terminal path.",
+          "default": "vscode"
         },
         {
           "name": "--appId <string>",

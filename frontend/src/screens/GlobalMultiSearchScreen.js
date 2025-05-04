@@ -10,15 +10,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  I18nManager,
   Switch,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
-import HighlightedText from "./HighlightedText";
 import Icon from "../components/Icon";
-
-// Import colors
 import colors from "../config/colors";
 
 // Function to convert Western numbers to Eastern Arabic numerals
@@ -29,34 +25,25 @@ const toArabicDigits = (num) => {
 };
 
 const GlobalMultiSearchScreen = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigation = useNavigation();
-  const isRTL = i18n.language === "ar";
 
   const [books, setBooks] = useState([]);
   const [selectedBooks, setSelectedBooks] = useState([]);
   const [searchText, setSearchText] = useState("");
-  const [results, setResults] = useState([]);
   const [loadingBooks, setLoadingBooks] = useState(true);
   const [loadingResults, setLoadingResults] = useState(false);
-  const [searchError, setSearchError] = useState(null);
-
-  // State to track search progress
   const [searchProgress, setSearchProgress] = useState({
     current: 0,
     total: 0,
   });
-
-  // New state variables for improved UI with many books
   const [bookFilter, setBookFilter] = useState("");
-  const [isBookSectionExpanded, setIsBookSectionExpanded] = useState(false);
+  const [isBookSectionExpanded, setIsBookSectionExpanded] = useState(true);
 
-  // Format numbers based on language
-  const formatNumber = (num) => {
-    return isRTL ? toArabicDigits(num) : String(num);
-  };
+  // Format numbers - always use Arabic
+  const formatNumber = (num) => toArabicDigits(num);
 
-  // Filter books based on search text
+  // Filter books based on filter text
   const filteredBooks = books.filter((book) =>
     book.title.toLowerCase().includes(bookFilter.toLowerCase())
   );
@@ -69,17 +56,12 @@ const GlobalMultiSearchScreen = () => {
           "http://ramaytilibrary-production.up.railway.app/api/books"
         );
         const data = await response.json();
-
-        // Sort books alphabetically
         const sortedBooks = data.sort((a, b) => a.title.localeCompare(b.title));
-
         const booksWithSelection = sortedBooks.map((book) => ({
           ...book,
           selected: false,
         }));
         setBooks(booksWithSelection);
-
-        // Auto-expand if there are few books
         setIsBookSectionExpanded(booksWithSelection.length <= 5);
       } catch (error) {
         console.error("Error fetching books:", error);
@@ -97,16 +79,11 @@ const GlobalMultiSearchScreen = () => {
       book.id === bookId ? { ...book, selected: !book.selected } : book
     );
     setBooks(updatedBooks);
-
-    const newlySelected = updatedBooks
-      .filter((b) => b.selected)
-      .map((b) => b.id);
-    setSelectedBooks(newlySelected);
+    setSelectedBooks(updatedBooks.filter((b) => b.selected).map((b) => b.id));
   };
 
   const handleSelectAll = () => {
     const allSelected = filteredBooks.every((book) => book.selected);
-
     const updatedBooks = books.map((book) => ({
       ...book,
       selected: bookFilter
@@ -115,14 +92,8 @@ const GlobalMultiSearchScreen = () => {
           : book.selected
         : !allSelected,
     }));
-
     setBooks(updatedBooks);
-
-    const newSelectedIds = updatedBooks
-      .filter((b) => b.selected)
-      .map((b) => b.id);
-
-    setSelectedBooks(newSelectedIds);
+    setSelectedBooks(updatedBooks.filter((b) => b.selected).map((b) => b.id));
   };
 
   // Function to search a single book
@@ -139,17 +110,13 @@ const GlobalMultiSearchScreen = () => {
       }
 
       const data = await response.json();
-
       if (!data.content || !Array.isArray(data.content)) {
         console.error(`Invalid content format for book ${bookId}`);
         return [];
       }
 
-      // Find the book title
       const book = books.find((b) => b.id === bookId);
       const bookTitle = book ? book.title : "Unknown Book";
-
-      // Search through the content pages for matches
       const bookResults = [];
       const searchLower = query.toLowerCase();
 
@@ -162,33 +129,25 @@ const GlobalMultiSearchScreen = () => {
 
         while (lastIndex !== -1) {
           lastIndex = pageLower.indexOf(searchLower, lastIndex);
-
           if (lastIndex !== -1) {
             matchCount++;
-
-            // Get surrounding text for snippet (40 chars before and after)
             const start = Math.max(0, lastIndex - 40);
             const end = Math.min(
               pageContent.length,
               lastIndex + searchLower.length + 40
             );
             const snippet = pageContent.substring(start, end);
-
             bookResults.push({
               bookId,
               bookTitle,
               page: pageIndex + 1,
               snippet,
             });
-
             lastIndex += searchLower.length;
-
-            // Limit results per page to avoid too many matches
             if (matchCount >= 5) break;
           }
         }
       });
-
       return bookResults;
     } catch (error) {
       console.error(`Error searching book ${bookId}:`, error);
@@ -203,146 +162,110 @@ const GlobalMultiSearchScreen = () => {
     }
 
     setLoadingResults(true);
-    setSearchError(null);
-    setResults([]);
     setSearchProgress({ current: 0, total: selectedBooks.length });
 
     try {
-      // Skip trying the global-multi endpoint since it's returning 500 errors
-      // Instead, directly search each book individually
       const allResults = [];
       let count = 0;
 
       for (const bookId of selectedBooks) {
         setSearchProgress({ current: ++count, total: selectedBooks.length });
-
         const bookResults = await searchSingleBook(bookId, searchText);
         allResults.push(...bookResults);
       }
 
       if (allResults.length > 0) {
-        // Sort results by book title and then by page number
         allResults.sort((a, b) => {
           if (a.bookTitle !== b.bookTitle) {
             return a.bookTitle.localeCompare(b.bookTitle);
           }
           return a.page - b.page;
         });
-
-        setResults(allResults);
-      } else {
-        setSearchError("No results found. Try a different search term.");
       }
+
+      navigation.navigate("SearchResults", {
+        searchText: searchText,
+        results: allResults,
+      });
     } catch (error) {
       console.error("Error during search:", error);
-      setSearchError(error.message || "Search failed. Please try again.");
+      Alert.alert(t("errorTitle"), t("searchFailed"));
     } finally {
       setLoadingResults(false);
       setSearchProgress({ current: 0, total: 0 });
     }
   };
 
-  // Only updating the handleResultPress function, rest of file remains the same
-
-  const handleResultPress = (result) => {
-    // Navigate to CustomPdfReader with the necessary parameters
-    // Pass the searchText to highlight the term on the page
-    navigation.navigate("DirectTab", {
-      screen: "CustomPdfReader",
-      params: {
-        bookId: result.bookId,
-        bookTitle: result.bookTitle,
-        page: result.page,
-        searchTerm: searchText, // Add this line to pass the search term
-      },
-    });
-  };
-
-  const getSelectedBooksCount = () => {
-    return books.filter((book) => book.selected).length;
-  };
+  const getSelectedBooksCount = () =>
+    books.filter((book) => book.selected).length;
 
   // Format the book selection count
   const formatBookSelectionText = () => {
     const selected = getSelectedBooksCount();
     const total = books.length;
-
-    if (selected === 0) {
-      return t("selectBooks") || "Select Books";
-    }
-
-    // Use the t function with formatted numbers
-    const countText = isRTL
-      ? `(${formatNumber(selected)}/${formatNumber(total)})`
-      : `(${selected}/${total})`;
-
-    return `${t("selectBooks")}: ${countText}`;
-  };
-
-  // Format results count
-  const formatResultsText = () => {
-    if (results.length === 0) return t("searchResults");
-
-    const countText = isRTL
-      ? `(${formatNumber(results.length)})`
-      : `(${results.length})`;
-
-    return `${t("searchResults")} ${countText}`;
+    return selected === 0
+      ? t("selectBooks") || "اختر الكتب"
+      : `${t("selectBooks") || "اختر الكتب"}: (${formatNumber(
+          selected
+        )}/${formatNumber(total)})`;
   };
 
   if (loadingBooks) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>
+          {t("loadingBooks") || "جاري تحميل الكتب..."}
+        </Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Search Card */}
-      <View style={styles.card}>
-        <View style={styles.searchSection}>
-          <TextInput
-            style={[
-              styles.searchInput,
-              { textAlign: isRTL ? "right" : "left" },
-            ]}
-            placeholder={t("enterSearchText")}
-            placeholderTextColor={colors.textSecondary}
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          <TouchableOpacity
-            style={[
-              styles.searchButton,
-              (!searchText.trim() || selectedBooks.length === 0) &&
-                styles.disabledButton,
-            ]}
-            onPress={handleSearch}
-            disabled={
-              !searchText.trim() || selectedBooks.length === 0 || loadingResults
-            }
-          >
-            <Text style={styles.searchButtonText}>{t("searchButton")}</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Search Input */}
+      <View style={styles.searchInputContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder={t("enterSearchText") || "أدخل نص البحث..."}
+          placeholderTextColor="#8896AB"
+          value={searchText}
+          onChangeText={setSearchText}
+          textAlign="right"
+        />
+        <TouchableOpacity
+          style={[
+            styles.searchButton,
+            (!searchText.trim() || selectedBooks.length === 0) &&
+              styles.disabledButton,
+          ]}
+          onPress={handleSearch}
+          disabled={
+            !searchText.trim() || selectedBooks.length === 0 || loadingResults
+          }
+        >
+          {loadingResults ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Icon name="search" size={20} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* Books Selection Card */}
-      <View style={styles.card}>
-        <View style={styles.headerRow}>
+      {/* Books Selection Section */}
+      <View style={styles.bookSelectionContainer}>
+        <View style={styles.bookHeaderRow}>
           <Text style={styles.sectionTitle}>{formatBookSelectionText()}</Text>
 
-          <View style={styles.bookControlsRow}>
+          <View style={styles.headerButtons}>
             <TouchableOpacity
               style={styles.selectAllButton}
               onPress={handleSelectAll}
             >
               <Text style={styles.selectAllText}>
                 {filteredBooks.every((book) => book.selected)
-                  ? t("deselectAll")
-                  : t("selectAll")}
+                  ? t("deselectAll") || "إلغاء الكل"
+                  : t("selectAll") || "تحديد الكل"}
               </Text>
             </TouchableOpacity>
 
@@ -352,150 +275,92 @@ const GlobalMultiSearchScreen = () => {
             >
               <Icon
                 name={isBookSectionExpanded ? "chevron-up" : "chevron-down"}
-                size={16}
+                size={18}
                 color={colors.primary}
               />
             </TouchableOpacity>
           </View>
         </View>
 
-        {isBookSectionExpanded && (
+        {isBookSectionExpanded ? (
           <>
-            <View style={styles.searchBookContainer}>
+            {/* Book Filter */}
+            <View style={styles.bookFilterContainer}>
               <TextInput
-                style={[
-                  styles.searchBookInput,
-                  { textAlign: isRTL ? "right" : "left" },
-                ]}
-                placeholder={t("filterBooks") || "Filter books..."}
+                style={styles.bookFilterInput}
+                placeholder={t("filterBooks") || "تصفية الكتب..."}
                 value={bookFilter}
                 onChangeText={setBookFilter}
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor="#8896AB"
+                textAlign="right"
               />
               {bookFilter ? (
                 <TouchableOpacity
-                  style={[
-                    styles.clearFilterButton,
-                    isRTL ? { left: 8 } : { right: 8 },
-                  ]}
+                  style={styles.clearFilterButton}
                   onPress={() => setBookFilter("")}
                 >
-                  <Icon name="x" size={16} color={colors.textSecondary} />
+                  <Icon name="close" size={16} color="#8896AB" />
                 </TouchableOpacity>
-              ) : null}
+              ) : (
+                <Icon
+                  name="search"
+                  size={16}
+                  color="#8896AB"
+                  style={styles.searchIcon}
+                />
+              )}
             </View>
 
+            {/* Book List */}
             <FlatList
               data={filteredBooks}
               keyExtractor={(item) => item.id}
               style={styles.booksList}
               renderItem={({ item }) => (
-                <View
-                  style={[
-                    styles.bookRow,
-                    item.selected && styles.bookRowSelected,
-                  ]}
-                >
-                  <Switch
-                    style={styles.bookSwitch}
-                    trackColor={{ false: "#DDD", true: colors.primary }}
-                    thumbColor={item.selected ? "#FFF" : "#F4F3F4"}
-                    onValueChange={() => toggleBookSelection(item.id)}
-                    value={item.selected}
-                  />
-
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => toggleBookSelection(item.id)}
-                    style={styles.bookTitleContainer}
-                  >
-                    <Text
-                      style={[
-                        styles.bookTitle,
-                        { textAlign: isRTL ? "right" : "left" },
-                      ]}
-                    >
-                      {item.title}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.noResultsText}>
-                  {t("noBooksFound") || "No books found"}
-                </Text>
-              }
-            />
-          </>
-        )}
-
-        {!isBookSectionExpanded && getSelectedBooksCount() > 0 && (
-          <View style={styles.selectedBooksPreview}>
-            <Text style={styles.selectedBooksCount}>
-              {isRTL
-                ? formatNumber(getSelectedBooksCount()) +
-                  " " +
-                  (t("booksSelected") || "books selected")
-                : getSelectedBooksCount() +
-                  " " +
-                  (t("booksSelected") || "books selected")}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Results Card */}
-      <View style={styles.resultsCard}>
-        <Text style={styles.sectionTitle}>{formatResultsText()}</Text>
-
-        <View style={styles.resultsContainer}>
-          {loadingResults ? (
-            <View style={styles.loadingResultsContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              {searchProgress.total > 0 && (
-                <Text style={styles.loadingText}>
-                  {t("searching")} {searchProgress.current}/
-                  {searchProgress.total}
-                </Text>
-              )}
-            </View>
-          ) : searchError ? (
-            <View style={styles.loadingResultsContainer}>
-              <Text style={styles.errorText}>{searchError}</Text>
-            </View>
-          ) : results.length > 0 ? (
-            <FlatList
-              data={results}
-              keyExtractor={(item, index) =>
-                `${item.bookId}-${item.page}-${index}`
-              }
-              renderItem={({ item }) => (
                 <TouchableOpacity
-                  onPress={() => handleResultPress(item)}
-                  style={styles.resultItem}
+                  onPress={() => toggleBookSelection(item.id)}
+                  style={[
+                    styles.bookItem,
+                    item.selected && styles.bookItemSelected,
+                  ]}
+                  activeOpacity={0.7}
                 >
                   <Text
                     style={[
-                      styles.resultTitle,
-                      { textAlign: isRTL ? "right" : "left" },
+                      styles.bookTitle,
+                      item.selected && styles.bookTitleSelected,
                     ]}
+                    numberOfLines={1}
                   >
-                    {item.bookTitle} - {t("page")}{" "}
-                    {isRTL ? formatNumber(item.page) : item.page}
+                    {item.title}
                   </Text>
-                  <HighlightedText
-                    text={item.snippet}
-                    highlight={searchText}
-                    textStyle={{ textAlign: isRTL ? "right" : "left" }}
+                  <Switch
+                    trackColor={{ false: "#E2E8F0", true: colors.primary }}
+                    thumbColor={"#FFFFFF"}
+                    onValueChange={() => toggleBookSelection(item.id)}
+                    value={item.selected}
                   />
                 </TouchableOpacity>
               )}
-              contentContainerStyle={styles.resultsList}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Icon name="book" size={48} color="#E2E8F0" />
+                  <Text style={styles.emptyText}>
+                    {t("noBooksFound") || "لا توجد كتب مطابقة"}
+                  </Text>
+                </View>
+              }
             />
-          ) : (
-            <Text style={styles.noResultsText}>{t("noResultsFound")}</Text>
-          )}
-        </View>
+          </>
+        ) : getSelectedBooksCount() > 0 ? (
+          <View style={styles.selectedSummary}>
+            <Text style={styles.selectedCount}>
+              {formatNumber(getSelectedBooksCount()) +
+                " " +
+                (t("booksSelected") || "كتب مختارة")}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -504,195 +369,163 @@ const GlobalMultiSearchScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-    padding: 10,
+    backgroundColor: "#F7FAFC",
+    padding: 16,
   },
-  loadingContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#F7FAFC",
   },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#4A5568",
+    textAlign: "center",
   },
-  searchSection: {
+  searchInputContainer: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: "#FFF",
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    color: colors.text,
-    fontSize: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: "#4A5568",
+    fontSize: 16,
+    borderRadius: 10,
   },
   searchButton: {
-    marginLeft: 8,
     backgroundColor: colors.primary,
-    borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    borderRadius: 8,
+    padding: 12,
+    marginHorizontal: 6,
   },
   disabledButton: {
-    backgroundColor: "#AAAAAA",
+    backgroundColor: "#CBD5E0",
   },
-  searchButtonText: {
-    color: "#FFF",
-    fontSize: 14,
+  bookSelectionContainer: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  headerRow: {
+  bookHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
-  },
-  bookControlsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  expandButton: {
-    padding: 6,
-    marginLeft: 8,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F7",
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "bold",
-    color: colors.text,
-    textAlign: I18nManager.isRTL ? "right" : "left",
+    color: "#2D3748",
+    textAlign: "right",
+  },
+  headerButtons: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   selectAllButton: {
     backgroundColor: colors.primary,
-    borderRadius: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 10,
   },
   selectAllText: {
-    color: "#FFF",
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "500",
   },
-  searchBookContainer: {
+  expandButton: {
+    padding: 6,
+  },
+  bookFilterContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F7",
+    backgroundColor: "#F8FAFC",
     position: "relative",
   },
-  searchBookInput: {
+  bookFilterInput: {
     flex: 1,
-    backgroundColor: "#F5F5F5",
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    color: colors.text,
     fontSize: 14,
+    color: "#4A5568",
+    paddingHorizontal: 8,
+    paddingRight: 28, // Space for the icon
   },
   clearFilterButton: {
     position: "absolute",
+    left: 16, // For RTL
     padding: 4,
   },
+  searchIcon: {
+    position: "absolute",
+    left: 16, // For RTL
+  },
   booksList: {
-    maxHeight: 200,
-  },
-  bookRow: {
-    flexDirection: "row", // Always left-to-right for switches
-    alignItems: "center",
-    padding: 10,
-    backgroundColor: "#F8F8F8",
-    marginBottom: 6,
-    borderRadius: 6,
-  },
-  bookRowSelected: {
-    backgroundColor: "rgba(33, 150, 243, 0.1)",
-    borderRightWidth: I18nManager.isRTL ? 2 : 0,
-    borderLeftWidth: I18nManager.isRTL ? 0 : 2,
-    borderRightColor: colors.primary,
-    borderLeftColor: colors.primary,
-  },
-  bookSwitch: {
-    // The switch is always on the left side
-    marginRight: 10,
-  },
-  bookTitleContainer: {
     flex: 1,
+  },
+  bookItem: {
+    flexDirection: "row-reverse", // For RTL
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F7",
+  },
+  bookItemSelected: {
+    backgroundColor: "rgba(30, 91, 155, 0.05)",
   },
   bookTitle: {
-    fontSize: 14,
-    color: colors.text,
+    flex: 1,
+    fontSize: 15,
+    color: "#4A5568",
+    textAlign: "right",
+    marginLeft: 12,
   },
-  selectedBooksPreview: {
-    paddingVertical: 8,
-    alignItems: "center",
-  },
-  selectedBooksCount: {
+  bookTitleSelected: {
     color: colors.primary,
     fontWeight: "500",
-    fontSize: 14,
   },
-  resultsCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 10,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  resultsContainer: {
-    flex: 1,
-    marginTop: 10,
-  },
-  loadingResultsContainer: {
-    flex: 1,
-    justifyContent: "center",
+  emptyContainer: {
+    padding: 24,
     alignItems: "center",
   },
-  loadingText: {
+  emptyText: {
     marginTop: 10,
-    color: colors.text,
     fontSize: 14,
-  },
-  errorText: {
-    color: "#FF6B6B",
-    fontSize: 14,
+    color: "#718096",
     textAlign: "center",
-    padding: 10,
   },
-  resultsList: {
-    paddingBottom: 10,
+  selectedSummary: {
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  resultItem: {
-    marginBottom: 8,
-    padding: 10,
-    backgroundColor: "#F9F9F9",
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#EEE",
-  },
-  resultTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
+  selectedCount: {
+    fontSize: 16,
+    fontWeight: "600",
     color: colors.primary,
-    marginBottom: 5,
-  },
-  noResultsText: {
-    color: colors.textSecondary,
-    fontSize: 15,
-    marginTop: 20,
-    textAlign: "center",
   },
 });
 

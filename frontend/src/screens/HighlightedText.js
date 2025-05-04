@@ -1,5 +1,6 @@
 import React from "react";
 import { Text, StyleSheet } from "react-native";
+import colors from "../config/colors";
 
 const HighlightedText = ({
   text,
@@ -10,7 +11,11 @@ const HighlightedText = ({
   activeHighlightStyle = {},
 }) => {
   if (!text || !highlight || !highlight.trim()) {
-    return <Text style={textStyle}>{text}</Text>;
+    return (
+      <Text style={[{ color: colors.text || "#000000" }, textStyle]}>
+        {text}
+      </Text>
+    );
   }
 
   const highlightLC = highlight.toLowerCase();
@@ -57,7 +62,7 @@ const HighlightedText = ({
   }
 
   return (
-    <Text style={textStyle}>
+    <Text style={[{ color: colors.text || "#000000" }, textStyle]}>
       {parts.map((part) => (
         <Text
           key={part.key}
@@ -71,7 +76,7 @@ const HighlightedText = ({
                     activeHighlightStyle,
                   ]
                 : [styles.highlight, highlightStyle]
-              : null
+              : { color: colors.text || "#000000" } // Explicitly set color for non-highlighted text
           }
         >
           {part.text}

@@ -11,6 +11,7 @@ import {
   I18nManager,
   findNodeHandle,
   UIManager,
+  Clipboard,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTranslation } from "react-i18next";
@@ -24,12 +25,17 @@ import HighlightedText from "./HighlightedText";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 
-// Helper function to detect if text contains Arabic characters
 const containsArabic = (text) => {
   return /[\u0600-\u06FF]/.test(text);
 };
 
-// Cache management functions
+// Function to convert Western numbers to Eastern Arabic numerals
+const toArabicDigits = (num) => {
+  if (num === undefined || num === null) return "";
+  const arabicDigits = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+  return String(num).replace(/[0-9]/g, (w) => arabicDigits[+w]);
+};
+
 const saveBookContent = async (bookId, content) => {
   try {
     const contentKey = `book_content_${bookId}`;
@@ -69,7 +75,6 @@ const getBookContent = async (bookId) => {
   }
 };
 
-// Find all occurrences of a substring in a string
 const findAllOccurrences = (text, searchString) => {
   if (!text || !searchString) return [];
 
@@ -86,48 +91,108 @@ const findAllOccurrences = (text, searchString) => {
   return indices;
 };
 
-const CustomPdfReaderScreen = ({ route }) => {
+const showCopyToast = (message) => {
+  Alert.alert("", message, [{ text: "OK" }], { cancelable: true });
+};
+
+const SelectableTextWrapper = ({ children, style, onSelectionChange }) => {
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
+  const textRef = useRef(null);
+
+  const handleLongPress = () => {
+    if (textRef.current && typeof onSelectionChange === "function") {
+      onSelectionChange(true);
+    }
+  };
+
+  return (
+    <Text
+      ref={textRef}
+      style={style}
+      selectable={true}
+      onLongPress={handleLongPress}
+    >
+      {children}
+    </Text>
+  );
+};
+
+const CustomPdfReaderScreen = ({ route, navigation }) => {
   const { t } = useTranslation();
-  // Expecting bookId, bookTitle, optional initial page, and optional searchTerm
   const { bookId, bookTitle, page, searchTerm } = route.params || {};
   const isRTL = I18nManager.isRTL;
 
-  // Track if we came from global search
   const [isFromGlobalSearch, setIsFromGlobalSearch] = useState(!!searchTerm);
-
-  // Content states
   const [bookContent, setBookContent] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isArabicContent, setIsArabicContent] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [isUsingCache, setIsUsingCache] = useState(false);
-
-  // Page tracking
   const [numberOfPages, setNumberOfPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(page || 1);
-
-  // Bookmark state
   const [isBookmarked, setIsBookmarked] = useState(false);
-
-  // Search states
   const [searchText, setSearchText] = useState(searchTerm || "");
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [occurrencesOnPage, setOccurrencesOnPage] = useState([]);
   const [activeOccurrenceIndex, setActiveOccurrenceIndex] = useState(0);
-
-  // Refs for scrolling
+  const [selectedText, setSelectedText] = useState("");
+  const [showSelectionToolbar, setShowSelectionToolbar] = useState(false);
+  const [selectionActive, setSelectionActive] = useState(false);
   const scrollViewRef = useRef(null);
   const textRef = useRef(null);
-
-  // Text customization
   const [fontSize, setFontSize] = useState(16);
   const [textColor, setTextColor] = useState("#000000");
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
 
-  // Set up network connectivity monitoring
+  // Swipe detection variables
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [touchStartY, setTouchStartY] = useState(0);
+  const [touchEndX, setTouchEndX] = useState(0);
+  const [touchEndY, setTouchEndY] = useState(0);
+  const [isVerticalScrolling, setIsVerticalScrolling] = useState(false);
+
+  // Add useEffect to ensure text and background always have proper contrast
+  useEffect(() => {
+    // Check if background is dark and text color is too dark
+    if (
+      backgroundColor === "#222222" &&
+      (textColor === "#000000" || textColor === "#333333")
+    ) {
+      setTextColor("#FFFFFF");
+    }
+    // Check if background is light and text color is too light
+    else if (
+      (backgroundColor === "#FFFFFF" || backgroundColor === "#F5F5DC") &&
+      textColor === "#FFFFFF"
+    ) {
+      setTextColor(backgroundColor === "#FFFFFF" ? "#000000" : "#333333");
+    }
+  }, [backgroundColor]);
+
+  // Add a focus event listener to reset the book's state when navigating back to it
+  useEffect(() => {
+    const resetBookState = navigation.addListener("focus", () => {
+      // Check if we're navigating back from another screen
+      if (route.params?.resetState) {
+        // Reset to initial state
+        setCurrentPage(page || 1);
+        setSearchText(searchTerm || "");
+        setIsSearchVisible(false);
+        setSearchResults([]);
+        setCurrentMatchIndex(0);
+        setOccurrencesOnPage([]);
+        setActiveOccurrenceIndex(0);
+        setShowSelectionToolbar(false);
+        setSelectionActive(false);
+      }
+    });
+
+    return resetBookState;
+  }, [navigation, route.params]);
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsOffline(!state.isConnected);
@@ -136,49 +201,38 @@ const CustomPdfReaderScreen = ({ route }) => {
     return () => unsubscribe();
   }, []);
 
-  // Initialize search if a search term is provided via navigation
   useEffect(() => {
     if (searchTerm && bookContent.length > 0) {
-      // Set search text but don't show the search field when coming from global search
       setSearchText(searchTerm);
 
-      // Still do the search in the background
       setTimeout(() => {
         handleSearch(searchTerm);
       }, 100);
     }
   }, [bookContent, searchTerm]);
 
-  // Scroll to the active occurrence on the current page
   useEffect(() => {
     if (occurrencesOnPage.length > 0 && scrollViewRef.current) {
       const index = activeOccurrenceIndex % occurrencesOnPage.length;
       const position = occurrencesOnPage[index];
 
-      // Calculate approximate position with less aggressive scrolling
-      // We'll adjust to position the highlight in the middle third of the screen
-      // Using a more conservative offset to avoid scrolling too far
-      const avgCharPerLine = 60; // Estimate characters per line
-      const linesPerScreen = 15; // Estimate visible lines
-      const charHeight = fontSize * 1.2; // Approximate height of a character
+      const avgCharPerLine = 60;
+      const linesPerScreen = 15;
+      const charHeight = fontSize * 1.2;
 
-      // Find the previous line breaks to estimate vertical position
       const pageContent = bookContent[currentPage - 1] || "";
       const textBeforeMatch = pageContent.substring(0, position);
       const lineBreaks = textBeforeMatch.split("\n").length - 1;
 
-      // Calculate approximate position based on character count and line breaks
       const estimatedLines =
         textBeforeMatch.length / avgCharPerLine + lineBreaks;
       const estimatedPosition = estimatedLines * charHeight;
 
-      // Apply a smaller offset to avoid scrolling too far
       const scrollOffset = Math.max(
         0,
         estimatedPosition - (linesPerScreen * charHeight) / 3
       );
 
-      // Scroll to the position with a slight delay to ensure rendering is complete
       setTimeout(() => {
         scrollViewRef.current.scrollTo({
           y: scrollOffset,
@@ -188,7 +242,6 @@ const CustomPdfReaderScreen = ({ route }) => {
     }
   }, [activeOccurrenceIndex, occurrencesOnPage, currentPage]);
 
-  // Update occurrences on page when page changes or search text changes
   useEffect(() => {
     if (searchText && currentPage > 0 && currentPage <= bookContent.length) {
       const pageContent = bookContent[currentPage - 1] || "";
@@ -202,7 +255,6 @@ const CustomPdfReaderScreen = ({ route }) => {
 
   const fetchFreshContent = async (effectiveBookId) => {
     try {
-      // First check if we're online before attempting fetch
       const networkState = await NetInfo.fetch();
       if (!networkState.isConnected) {
         console.log("Not fetching fresh content - device is offline");
@@ -213,9 +265,8 @@ const CustomPdfReaderScreen = ({ route }) => {
         const url = `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
         console.log("Fetching fresh content from URL:", url);
 
-        // Create a manual timeout with AbortController instead of using AbortSignal.timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         const response = await fetch(url, {
           signal: controller.signal,
@@ -227,7 +278,6 @@ const CustomPdfReaderScreen = ({ route }) => {
           },
         });
 
-        // Clear the timeout since the request completed
         clearTimeout(timeoutId);
 
         if (!response.ok) {
@@ -238,18 +288,14 @@ const CustomPdfReaderScreen = ({ route }) => {
 
         const data = await response.json();
 
-        // Save to local storage cache if you're using caching
         if (typeof saveBookContent === "function") {
           await saveBookContent(effectiveBookId, data.content);
         }
 
-        // Only update state if we're not already showing cached content
-        // or if we're using cache but now got fresh content
         if (loading || isUsingCache) {
           setBookContent(data.content);
           setNumberOfPages(data.content.length);
 
-          // Check if content is Arabic
           if (data.content && data.content.length > 0) {
             const isArabic = containsArabic(data.content[0]);
             setIsArabicContent(isArabic);
@@ -260,7 +306,6 @@ const CustomPdfReaderScreen = ({ route }) => {
         }
       } catch (error) {
         console.error("Error fetching fresh content:", error);
-        // Only show error if we haven't already loaded from cache
         if (loading) {
           setError(error.message);
           setLoading(false);
@@ -271,30 +316,24 @@ const CustomPdfReaderScreen = ({ route }) => {
     }
   };
 
-  // Fetch the book content from your backend or cache
   useEffect(() => {
     const fetchBookContent = async () => {
       try {
         setLoading(true);
 
-        // Use a fallback ID if bookId is undefined
         const effectiveBookId = bookId || "C2qKmMSFbnMRVbdrfAAn";
 
-        // Check if we have the content cached locally
         const cachedContent = await getBookContent(effectiveBookId);
 
-        // Check network connection
         const networkState = await NetInfo.fetch();
         const isConnected = networkState.isConnected;
         setIsOffline(!isConnected);
 
         if (cachedContent && cachedContent.length > 0) {
-          // Use the cached content if we have it
           setBookContent(cachedContent);
           setNumberOfPages(cachedContent.length);
           setIsUsingCache(true);
 
-          // Check if content is Arabic by sampling the first page
           if (cachedContent && cachedContent.length > 0) {
             const isArabic = containsArabic(cachedContent[0]);
             setIsArabicContent(isArabic);
@@ -302,9 +341,7 @@ const CustomPdfReaderScreen = ({ route }) => {
 
           setLoading(false);
 
-          // If we're online, fetch fresh content in background to update cache
           if (isConnected) {
-            // Use setTimeout to allow the UI to render first
             setTimeout(() => {
               fetchFreshContent(effectiveBookId).catch((err) => {
                 console.log("Background refresh failed silently:", err.message);
@@ -314,14 +351,12 @@ const CustomPdfReaderScreen = ({ route }) => {
           return;
         }
 
-        // If no cached content and offline, show error
         if (!isConnected) {
           throw new Error(
             "No internet connection and no cached content available"
           );
         }
 
-        // Fetch content from server
         await fetchFreshContent(effectiveBookId);
       } catch (error) {
         console.error("Error fetching book content:", error);
@@ -334,7 +369,6 @@ const CustomPdfReaderScreen = ({ route }) => {
     fetchBookContent();
   }, [bookId]);
 
-  // Check bookmark whenever page changes
   const checkBookmark = async () => {
     try {
       const bookmarks = await getBookmarks();
@@ -351,13 +385,41 @@ const CustomPdfReaderScreen = ({ route }) => {
     checkBookmark();
   }, [currentPage]);
 
-  // Search in content
+  const handleTextSelection = (hasSelection) => {
+    setSelectionActive(hasSelection);
+    if (hasSelection) {
+      setShowSelectionToolbar(true);
+    } else {
+      setShowSelectionToolbar(false);
+    }
+  };
+
+  const copySelectedText = async () => {
+    try {
+      const selection = await new Promise((resolve) => {
+        resolve(getCurrentSelection());
+      });
+
+      if (selection) {
+        Clipboard.setString(selection);
+        showCopyToast(t("textCopied") || "Text copied to clipboard");
+        setShowSelectionToolbar(false);
+        setSelectionActive(false);
+      }
+    } catch (error) {
+      console.error("Error copying text:", error);
+    }
+  };
+
+  const getCurrentSelection = () => {
+    return currentPageContent.substring(0, 100) + "...";
+  };
+
   const handleSearch = async (term = searchText) => {
     if (!term.trim()) return;
 
     const results = [];
 
-    // Search through all pages
     bookContent.forEach((pageContent, pageIndex) => {
       const lowerCasePageText = pageContent.toLowerCase();
       const lowerCaseSearchText = term.toLowerCase();
@@ -375,7 +437,6 @@ const CustomPdfReaderScreen = ({ route }) => {
 
         matchCount++;
 
-        // Get surrounding text for snippet (40 chars before and after)
         const snippetStart = Math.max(0, foundIndex - 40);
         const snippetEnd = Math.min(
           pageContent.length,
@@ -391,7 +452,6 @@ const CustomPdfReaderScreen = ({ route }) => {
 
         startIndex = foundIndex + lowerCaseSearchText.length;
 
-        // Limit results per page to avoid too many matches
         if (matchCount >= 15) break;
       }
     });
@@ -402,7 +462,6 @@ const CustomPdfReaderScreen = ({ route }) => {
     if (results.length > 0) {
       jumpToMatch(0, results);
     } else if (!isFromGlobalSearch) {
-      // Only show alert if user manually searched
       Alert.alert(t("search"), t("noResultsFound"));
     }
   };
@@ -412,11 +471,8 @@ const CustomPdfReaderScreen = ({ route }) => {
     if (!match) return;
 
     setCurrentPage(match.page);
-
-    // When the page changes, useEffect will handle calculating occurrences and scrolling
   };
 
-  // Navigate to next occurrence on the current page
   const nextOccurrenceOnPage = () => {
     if (occurrencesOnPage.length === 0) return;
 
@@ -425,7 +481,6 @@ const CustomPdfReaderScreen = ({ route }) => {
     );
   };
 
-  // Navigate to previous occurrence on the current page
   const prevOccurrenceOnPage = () => {
     if (occurrencesOnPage.length === 0) return;
 
@@ -496,7 +551,52 @@ const CustomPdfReaderScreen = ({ route }) => {
     }
   };
 
-  // Loading indicator
+  // Touch handlers for swipe navigation
+  const handleTouchStart = (e) => {
+    setTouchStartX(e.nativeEvent.pageX);
+    setTouchStartY(e.nativeEvent.pageY);
+    setIsVerticalScrolling(false);
+  };
+
+  const handleTouchMove = (e) => {
+    const currentY = e.nativeEvent.pageY;
+    const verticalDistance = Math.abs(currentY - touchStartY);
+
+    // If vertical scrolling is detected, don't consider this a swipe
+    if (verticalDistance > 15) {
+      setIsVerticalScrolling(true);
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    const currentX = e.nativeEvent.pageX;
+    setTouchEndX(currentX);
+
+    // Only process swipe if not scrolling vertically
+    if (!isVerticalScrolling) {
+      const swipeDistance = touchEndX - touchStartX;
+      const minSwipeDistance = 80; // Minimum swipe distance
+
+      if (Math.abs(swipeDistance) > minSwipeDistance) {
+        if (isRTL || isArabicContent) {
+          // RTL: swipe left for previous, right for next
+          if (swipeDistance < 0) {
+            goToPrevPage();
+          } else {
+            goToNextPage();
+          }
+        } else {
+          // LTR: swipe right for previous, left for next
+          if (swipeDistance > 0) {
+            goToPrevPage();
+          } else {
+            goToNextPage();
+          }
+        }
+      }
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -506,7 +606,6 @@ const CustomPdfReaderScreen = ({ route }) => {
     );
   }
 
-  // Error handling
   if (error) {
     return (
       <View style={styles.loadingContainer}>
@@ -518,7 +617,6 @@ const CustomPdfReaderScreen = ({ route }) => {
     );
   }
 
-  // If we failed to get content
   if (!bookContent || bookContent.length === 0) {
     return (
       <View style={styles.loadingContainer}>
@@ -530,7 +628,6 @@ const CustomPdfReaderScreen = ({ route }) => {
   const currentPageContent = bookContent[currentPage - 1] || "";
   const currentMatch = searchResults[currentMatchIndex];
 
-  // Get text style based on language direction
   const getTextStyle = () => {
     return {
       fontSize: fontSize,
@@ -542,8 +639,12 @@ const CustomPdfReaderScreen = ({ route }) => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor }]}>
-      {/* Top Navigation Bar */}
+    <View
+      style={[styles.container, { backgroundColor }]}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       <View style={styles.navBar}>
         <TouchableOpacity
           style={styles.navButton}
@@ -559,7 +660,8 @@ const CustomPdfReaderScreen = ({ route }) => {
 
         <View style={styles.pageInfo}>
           <Text style={styles.pageInfoText}>
-            {t("page")} {currentPage} {t("of")} {numberOfPages}
+            {t("page")} {toArabicDigits(currentPage)} {t("of")}{" "}
+            {toArabicDigits(numberOfPages)}
             {isUsingCache ? ` (${t("cached")})` : ""}
           </Text>
         </View>
@@ -584,9 +686,7 @@ const CustomPdfReaderScreen = ({ route }) => {
         </View>
       )}
 
-      {/* Controls Toolbar */}
       <View style={styles.toolbar}>
-        {/* Only show search button if we're not from global search */}
         <TouchableOpacity
           style={styles.toolbarButton}
           onPress={() => setIsSearchVisible(!isSearchVisible)}
@@ -598,7 +698,6 @@ const CustomPdfReaderScreen = ({ route }) => {
           />
         </TouchableOpacity>
 
-        {/* Bookmark Toggle */}
         <TouchableOpacity
           style={styles.toolbarButton}
           onPress={handleToggleBookmark}
@@ -610,7 +709,6 @@ const CustomPdfReaderScreen = ({ route }) => {
           />
         </TouchableOpacity>
 
-        {/* Font Size Controls */}
         <TouchableOpacity
           style={styles.toolbarButton}
           onPress={() => setFontSize(Math.max(12, fontSize - 2))}
@@ -627,7 +725,6 @@ const CustomPdfReaderScreen = ({ route }) => {
           <Ionicons name="text" size={24} color="#FFF" />
         </TouchableOpacity>
 
-        {/* Color Schemes */}
         <View style={styles.colorButtonsContainer}>
           <TouchableOpacity
             style={[styles.colorOption, { backgroundColor: "#FFFFFF" }]}
@@ -656,7 +753,6 @@ const CustomPdfReaderScreen = ({ route }) => {
         </View>
       </View>
 
-      {/* Search Bar (conditionally rendered) */}
       {isSearchVisible && (
         <View style={styles.searchBarContainer}>
           <TextInput
@@ -680,12 +776,11 @@ const CustomPdfReaderScreen = ({ route }) => {
         </View>
       )}
 
-      {/* Page-level Occurrence Navigation - Show for any search */}
       {occurrencesOnPage.length > 0 && (
         <View style={styles.searchResultsNav}>
           <Text style={styles.matchCount}>
-            {activeOccurrenceIndex + 1}/{occurrencesOnPage.length} {t("on")}{" "}
-            {t("page")}
+            {toArabicDigits(activeOccurrenceIndex + 1)}/
+            {toArabicDigits(occurrencesOnPage.length)} {t("on")} {t("page")}
           </Text>
           <TouchableOpacity
             onPress={prevOccurrenceOnPage}
@@ -710,11 +805,11 @@ const CustomPdfReaderScreen = ({ route }) => {
         </View>
       )}
 
-      {/* Global Results Navigation - Only if manually searching (not from global) */}
       {searchResults.length > 1 && isSearchVisible && (
         <View style={styles.globalSearchNav}>
           <Text style={styles.globalMatchCount}>
-            {currentMatchIndex + 1}/{searchResults.length} {t("total")}
+            {toArabicDigits(currentMatchIndex + 1)}/
+            {toArabicDigits(searchResults.length)} {t("total")}
           </Text>
           <TouchableOpacity
             onPress={handlePrevMatch}
@@ -740,7 +835,6 @@ const CustomPdfReaderScreen = ({ route }) => {
         </View>
       )}
 
-      {/* Content Display */}
       <ScrollView
         ref={scrollViewRef}
         style={styles.contentContainer}
@@ -753,22 +847,42 @@ const CustomPdfReaderScreen = ({ route }) => {
         (occurrencesOnPage.length > 0 ||
           (currentMatch && currentMatch.page === currentPage)) ? (
           <View ref={textRef}>
-            <HighlightedText
-              text={currentPageContent}
-              highlight={searchText}
-              textStyle={getTextStyle()}
-              highlightStyle={{ backgroundColor: "yellow" }}
-              activeHighlightIndex={activeOccurrenceIndex}
-              activeHighlightStyle={{
-                backgroundColor: "#4CAF50",
-                color: "#FFFFFF",
-              }}
-            />
+            <SelectableTextWrapper
+              style={getTextStyle()}
+              onSelectionChange={handleTextSelection}
+            >
+              <HighlightedText
+                text={currentPageContent}
+                highlight={searchText}
+                textStyle={getTextStyle()}
+                highlightStyle={{ backgroundColor: "yellow" }}
+                activeHighlightIndex={activeOccurrenceIndex}
+                activeHighlightStyle={{
+                  backgroundColor: "#4CAF50",
+                  color: "#FFFFFF",
+                }}
+              />
+            </SelectableTextWrapper>
           </View>
         ) : (
-          <Text style={getTextStyle()}>{currentPageContent}</Text>
+          <SelectableTextWrapper
+            style={getTextStyle()}
+            onSelectionChange={handleTextSelection}
+          >
+            <Text style={getTextStyle()} selectable={true}>
+              {currentPageContent}
+            </Text>
+          </SelectableTextWrapper>
         )}
       </ScrollView>
+
+      <View style={styles.swipeHintContainer}>
+        <Text style={styles.swipeHintText}>
+          {isArabicContent || isRTL
+            ? "← اسحب لليمين أو لليسار للتنقل بين الصفحات →"
+            : "← Swipe left or right to navigate pages →"}
+        </Text>
+      </View>
     </View>
   );
 };
@@ -946,6 +1060,46 @@ const styles = StyleSheet.create({
   contentInner: {
     padding: 16,
     width: "100%",
+  },
+  selectionToolbar: {
+    flexDirection: "row",
+    backgroundColor: colors.primary || "#2196F3",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.2)",
+  },
+  selectionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 4,
+    marginHorizontal: 4,
+  },
+  selectionButtonText: {
+    marginLeft: 6,
+    color: "#FFF",
+    fontSize: 13,
+  },
+  swipeHintContainer: {
+    position: "absolute",
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    padding: 8,
+    borderRadius: 8,
+    alignItems: "center",
+    opacity: 0.8,
+  },
+  swipeHintText: {
+    color: "#FFF",
+    fontWeight: "bold",
+    textAlign: "center",
   },
 });
 

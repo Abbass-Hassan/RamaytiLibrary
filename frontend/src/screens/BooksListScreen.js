@@ -19,6 +19,18 @@ import { I18nManager } from "react-native";
 // Working API endpoint based on our tests
 const API_URL = "http://ramaytilibrary-production.up.railway.app/api/books";
 
+// Helper function to convert numbers to Arabic numerals
+const toArabicNumeral = (num) => {
+  const arabicNumerals = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+  return num
+    .toString()
+    .split("")
+    .map((digit) =>
+      isNaN(parseInt(digit)) ? digit : arabicNumerals[parseInt(digit)]
+    )
+    .join("");
+};
+
 const BooksListScreen = ({ navigation }) => {
   const { t, i18n } = useTranslation();
   const isRTL = I18nManager.isRTL || i18n.language === "ar";
@@ -114,7 +126,7 @@ const BooksListScreen = ({ navigation }) => {
     }
   };
 
-  const renderItem = ({ item }) => (
+  const renderItem = ({ item, index }) => (
     <TouchableOpacity onPress={() => handleBookPress(item)} style={styles.card}>
       <View style={styles.coverContainer}>
         <Image
@@ -122,10 +134,8 @@ const BooksListScreen = ({ navigation }) => {
           style={styles.coverImage}
           resizeMode="cover"
         />
+        <Text style={styles.volumeNumber}>{toArabicNumeral(index + 1)}</Text>
       </View>
-      <Text style={styles.title} numberOfLines={2}>
-        {item.title}
-      </Text>
     </TouchableOpacity>
   );
 
@@ -238,39 +248,35 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "48%",
-    backgroundColor: colors.card,
     marginVertical: 8,
-    borderRadius: 8,
-    padding: 12,
     alignItems: "center",
-    elevation: 3,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   coverContainer: {
-    width: 120,
-    height: 160,
-    marginBottom: 10,
+    width: 160,
+    height: 220,
+    position: "relative",
     borderRadius: 8,
     overflow: "hidden",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
   coverImage: {
     width: "100%",
     height: "100%",
   },
-  title: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: colors.text,
-    textAlign: "center",
-  },
-  emptyText: {
-    textAlign: "center",
-    marginTop: 20,
-    fontSize: 16,
-    color: colors.textSecondary,
+  volumeNumber: {
+    position: "absolute",
+    bottom: 10,
+    alignSelf: "center",
+    fontSize: 26,
+    fontWeight: "bold",
+    color: "white",
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
 });
 
