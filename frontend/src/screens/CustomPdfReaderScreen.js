@@ -26,7 +26,10 @@ import {
   downloadPdfToLocal,
   getFilenameFromPath,
 } from "../services/pdfStorageService";
-import { initializeBundledPdfs } from "../services/bundledPdfService";
+import {
+  initializeBundledPdfs,
+  getAllBundledPdfs,
+} from "../services/bundledPdfService";
 import colors from "../config/colors";
 import HighlightedText from "./HighlightedText";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -255,7 +258,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
     try {
       const networkState = await NetInfo.fetch();
       if (!networkState.isConnected) {
-        console.log("Not fetching fresh content - device is offline");
+        console.log("Device is offline, skipping content refresh");
         return;
       }
 
@@ -303,14 +306,15 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
           setIsUsingCache(false);
         }
       } catch (error) {
-        console.error("Error fetching fresh content:", error);
-        if (loading) {
+        console.log("Error fetching fresh content:", error.message);
+        // Only set error state if we're still loading and there's no content
+        if (loading && (!bookContent || bookContent.length === 0)) {
           setError(error.message);
           setLoading(false);
         }
       }
     } catch (generalError) {
-      console.error("General error in fetchFreshContent:", generalError);
+      console.log("General error in fetchFreshContent:", generalError.message);
     }
   };
 
@@ -319,17 +323,23 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
       try {
         setLoading(true);
 
+        console.log("Initializing bundled PDFs...");
         await initializeBundledPdfs();
+        console.log("Bundled PDFs:", JSON.stringify(getAllBundledPdfs()));
 
         const effectiveBookId = bookId || "C2qKmMSFbnMRVbdrfAAn";
+        console.log("Getting content for book ID:", effectiveBookId);
 
+        // Try to get cached content first
         const cachedContent = await getBookContent(effectiveBookId);
 
         const networkState = await NetInfo.fetch();
         const isConnected = networkState.isConnected;
         setIsOffline(!isConnected);
+        console.log("Network connected:", isConnected);
 
         if (cachedContent && cachedContent.length > 0) {
+          console.log("Using cached content", cachedContent.length, "pages");
           setBookContent(cachedContent);
           setNumberOfPages(cachedContent.length);
           setIsUsingCache(true);
@@ -341,21 +351,28 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
 
           setLoading(false);
 
+          // Only try to refresh if online
           if (isConnected) {
+            console.log("Will refresh content in background");
             setTimeout(() => {
               fetchFreshContent(effectiveBookId).catch((err) => {
                 console.log("Background refresh failed silently:", err.message);
+                // No error state set as we have cached content
               });
             }, 2000);
           }
           return;
         }
 
+        console.log("No cached content, checking for book details...");
+
+        // Try to get book details to extract PDF filename
         let bookData = null;
         let pdfFilename = null;
 
         if (isConnected) {
           try {
+            console.log("Fetching book details...");
             const response = await fetch(
               `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}`
             );
@@ -363,49 +380,95 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
               bookData = await response.json();
               pdfFilename =
                 bookData.pdfFilename || getFilenameFromPath(bookData.pdfPath);
+              console.log("Book details fetched, PDF filename:", pdfFilename);
             }
           } catch (error) {
-            console.log("Failed to fetch book details:", error);
+            console.log("Failed to fetch book details:", error.message);
           }
         }
 
+        // Try to get PDF from bundle or local storage
+        console.log(
+          "Checking for PDF in bundle/local storage with filename:",
+          pdfFilename
+        );
         const localPdfPath = await getPdfPath(effectiveBookId, pdfFilename);
 
         if (localPdfPath) {
-          console.log("PDF found locally or in bundle, extracting content...");
-          try {
-            const contentResponse = await fetch(
-              `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`
-            );
-            if (contentResponse.ok) {
-              const data = await contentResponse.json();
-              await saveBookContent(effectiveBookId, data.content);
+          console.log("PDF found locally or in bundle:", localPdfPath);
 
-              setBookContent(data.content);
-              setNumberOfPages(data.content.length);
+          // If we're online, try to get content from server
+          if (isConnected) {
+            try {
+              console.log("Extracting content from server...");
+              const contentResponse = await fetch(
+                `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`
+              );
+              if (contentResponse.ok) {
+                const data = await contentResponse.json();
+                await saveBookContent(effectiveBookId, data.content);
 
-              if (data.content && data.content.length > 0) {
-                const isArabic = containsArabic(data.content[0]);
-                setIsArabicContent(isArabic);
+                setBookContent(data.content);
+                setNumberOfPages(data.content.length);
+
+                if (data.content && data.content.length > 0) {
+                  const isArabic = containsArabic(data.content[0]);
+                  setIsArabicContent(isArabic);
+                }
+
+                setLoading(false);
+                return;
               }
+            } catch (error) {
+              console.log(
+                "Failed to extract content, using mock content:",
+                error.message
+              );
+              // If server extraction fails but we have the PDF, use mock content
+              const mockContent = [
+                `Content for book ${
+                  bookTitle || effectiveBookId
+                } is available offline.\n\nThe PDF has been bundled with the app, but text extraction is not available without internet.`,
+                `Please turn on internet connection to extract text content, or use the standard PDF viewer.`,
+              ];
 
+              await saveBookContent(effectiveBookId, mockContent);
+              setBookContent(mockContent);
+              setNumberOfPages(mockContent.length);
               setLoading(false);
               return;
             }
-          } catch (error) {
-            console.log("Failed to extract content from local PDF:", error);
+          } else {
+            // If offline but we have the PDF, use mock content
+            console.log("Device is offline but PDF exists, using mock content");
+            const mockContent = [
+              `Content for book ${
+                bookTitle || effectiveBookId
+              } is available offline.\n\nThe PDF has been bundled with the app, but text extraction is not available without internet.`,
+              `Please turn on internet connection to extract text content, or use the standard PDF viewer.`,
+            ];
+
+            await saveBookContent(effectiveBookId, mockContent);
+            setBookContent(mockContent);
+            setNumberOfPages(mockContent.length);
+            setLoading(false);
+            return;
           }
         }
 
+        // If we're offline and have no content/PDF, show error
         if (!isConnected) {
+          console.log("No internet and no cached content/PDF");
           throw new Error(
             "No internet connection and no cached content available"
           );
         }
 
+        // Last resort: fetch content from server
+        console.log("Fetching fresh content as last resort");
         await fetchFreshContent(effectiveBookId);
       } catch (error) {
-        console.error("Error fetching book content:", error);
+        console.log("Error in fetchBookContent:", error.message);
         setError(error.message);
         setLoading(false);
         Alert.alert(t("errorTitle"), t("errorLoading") + ": " + error.message);

@@ -137,7 +137,7 @@ const MainTabs = ({ route }) => {
                 textAlign: "center",
               }}
             >
-              {t("direct")}
+              {t("search")}
             </Text>
           ),
         }}

@@ -16,10 +16,17 @@ import {
   saveBookmark,
   removeBookmark,
 } from "../services/bookmarkService";
+import {
+  hasBundledPdf,
+  getBundledPdfPath,
+  initializeBundledPdfs,
+} from "../services/bundledPdfService";
+import { getFilenameFromPath } from "../services/pdfStorageService";
 import i18n from "../i18n";
 import colors from "../config/colors";
 import HighlightedText from "./HighlightedText";
 import RNFS from "react-native-fs";
+import NetInfo from "@react-native-community/netinfo";
 
 // Base directory for storing PDFs
 const PDF_BASE_DIR = RNFS.DocumentDirectoryPath + "/pdfs/";
@@ -66,6 +73,37 @@ const getPdfPath = async (bookId) => {
     return null;
   } catch (error) {
     console.error("Error getting PDF path:", error);
+    return null;
+  }
+};
+
+// Copy a bundled PDF to local storage
+const copyBundledPdfToLocal = async (bookId, bundledPath) => {
+  try {
+    await ensurePdfDirectory();
+    const destPath = `${PDF_BASE_DIR}book_${bookId}.pdf`;
+
+    // Check if file already exists
+    const exists = await RNFS.exists(destPath);
+    if (exists) {
+      pdfPathCache[bookId] = destPath;
+      return destPath;
+    }
+
+    // Platform-specific copy process
+    if (Platform.OS === "android") {
+      // For Android, copy from assets
+      await RNFS.copyFileAssets(bundledPath, destPath);
+    } else {
+      // For iOS, standard file copy
+      await RNFS.copyFile(bundledPath, destPath);
+    }
+
+    console.log(`Copied bundled PDF to ${destPath}`);
+    pdfPathCache[bookId] = destPath;
+    return destPath;
+  } catch (error) {
+    console.error(`Error copying bundled PDF: ${error}`);
     return null;
   }
 };
@@ -151,7 +189,8 @@ const downloadPdfToLocal = async (bookId, url) => {
 };
 
 const DirectPdfScreen = ({ route }) => {
-  const { bookId, bookTitle, page } = route.params || {};
+  const { bookId, bookTitle, page, pdfFilename, isOffline } =
+    route.params || {};
   const pdfRef = useRef(null);
 
   // PDF loading states
@@ -160,6 +199,7 @@ const DirectPdfScreen = ({ route }) => {
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [pdfError, setPdfError] = useState(null);
+  const [networkConnected, setNetworkConnected] = useState(true);
 
   // Page tracking
   const [currentPage, setCurrentPage] = useState(page || 1);
@@ -181,6 +221,14 @@ const DirectPdfScreen = ({ route }) => {
   const MAX_SCALE = 2.5;
   const SCALE_STEP = 0.1;
 
+  // Monitor network connectivity
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setNetworkConnected(state.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Fetch book data and prepare PDF
   useEffect(() => {
     const fetchBookData = async () => {
@@ -189,6 +237,11 @@ const DirectPdfScreen = ({ route }) => {
         setLoadingProgress(10);
 
         console.log("Fetching book data for ID:", bookId);
+        console.log("PDF filename:", pdfFilename);
+
+        // Initialize bundled PDFs list
+        await initializeBundledPdfs();
+        setLoadingProgress(20);
 
         // First check if we already have the PDF locally
         let localPath = await getPdfPath(bookId);
@@ -198,47 +251,75 @@ const DirectPdfScreen = ({ route }) => {
           setLocalPdfPath(localPath);
           setLoadingProgress(90);
         } else {
-          // If not found locally, fetch book metadata from API
-          setLoadingProgress(30);
-          const response = await fetch(
-            `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`
-          );
+          // Check if this PDF is bundled with the app
+          if (pdfFilename && hasBundledPdf(pdfFilename)) {
+            console.log("PDF found in app bundle:", pdfFilename);
+            const bundledPath = getBundledPdfPath(pdfFilename);
 
-          if (!response.ok) {
-            throw new Error(
-              `API request failed with status ${response.status}`
-            );
-          }
+            if (bundledPath) {
+              setLoadingProgress(50);
+              // Copy the bundled PDF to local storage
+              localPath = await copyBundledPdfToLocal(bookId, bundledPath);
 
-          const data = await response.json();
-          console.log("Book data received:", data);
-
-          // Check if pdfPath exists in the response
-          if (!data.pdfPath) {
-            // Some Firestore implementations might use lowercase field names
-            console.log(
-              "pdfPath not found, checking for alternative field names"
-            );
-            if (data.pdfpath) {
-              data.pdfPath = data.pdfpath;
-            } else if (data.pdf_path) {
-              data.pdfPath = data.pdf_path;
-            } else {
-              throw new Error("PDF path not found in book data");
+              if (localPath) {
+                console.log("Copied bundled PDF to local storage:", localPath);
+                setLocalPdfPath(localPath);
+                setLoadingProgress(90);
+              } else {
+                throw new Error("Failed to copy bundled PDF to local storage");
+              }
             }
-          }
-
-          console.log("PDF URL from API:", data.pdfPath);
-          setPdfUrl(data.pdfPath);
-          setLoadingProgress(50);
-
-          // Download the PDF to local storage
-          localPath = await downloadPdfToLocal(bookId, data.pdfPath);
-          if (localPath) {
-            setLocalPdfPath(localPath);
-            setLoadingProgress(90);
           } else {
-            throw new Error("Failed to download PDF");
+            // Check network connection
+            const networkState = await NetInfo.fetch();
+            if (!networkState.isConnected) {
+              throw new Error(
+                "No internet connection and PDF not available offline"
+              );
+            }
+
+            // If not found locally or in bundle, fetch book metadata from API
+            setLoadingProgress(30);
+            const response = await fetch(
+              `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`
+            );
+
+            if (!response.ok) {
+              throw new Error(
+                `API request failed with status ${response.status}`
+              );
+            }
+
+            const data = await response.json();
+            console.log("Book data received:", data);
+
+            // Check if pdfPath exists in the response
+            if (!data.pdfPath) {
+              // Some Firestore implementations might use lowercase field names
+              console.log(
+                "pdfPath not found, checking for alternative field names"
+              );
+              if (data.pdfpath) {
+                data.pdfPath = data.pdfpath;
+              } else if (data.pdf_path) {
+                data.pdfPath = data.pdf_path;
+              } else {
+                throw new Error("PDF path not found in book data");
+              }
+            }
+
+            console.log("PDF URL from API:", data.pdfPath);
+            setPdfUrl(data.pdfPath);
+            setLoadingProgress(50);
+
+            // Download the PDF to local storage
+            localPath = await downloadPdfToLocal(bookId, data.pdfPath);
+            if (localPath) {
+              setLocalPdfPath(localPath);
+              setLoadingProgress(90);
+            } else {
+              throw new Error("Failed to download PDF");
+            }
           }
         }
 
@@ -257,7 +338,7 @@ const DirectPdfScreen = ({ route }) => {
     return () => {
       // Cleanup code if needed
     };
-  }, [bookId]);
+  }, [bookId, pdfFilename]);
 
   // Check bookmark whenever page changes (optimized to avoid unnecessary checks)
   const checkBookmark = useCallback(async () => {
@@ -279,6 +360,13 @@ const DirectPdfScreen = ({ route }) => {
   // Optimized search function
   const handleSearch = async () => {
     if (!searchText.trim()) return;
+
+    // Don't attempt search if offline
+    if (!networkConnected) {
+      Alert.alert(i18n.t("offlineMode"), i18n.t("searchRequiresInternet"));
+      return;
+    }
+
     try {
       const response = await fetch(
         `http://ramaytilibrary-production.up.railway.app/api/search/pdf?bookId=${bookId}&q=${encodeURIComponent(
@@ -292,6 +380,8 @@ const DirectPdfScreen = ({ route }) => {
 
       if (results.length > 0) {
         jumpToMatch(0, results);
+      } else {
+        Alert.alert(i18n.t("search"), i18n.t("noResultsFound"));
       }
     } catch (error) {
       console.error("Error searching PDF:", error);
@@ -459,11 +549,26 @@ const DirectPdfScreen = ({ route }) => {
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
+          <TouchableOpacity
+            style={[
+              styles.searchButton,
+              !networkConnected && styles.disabledButton,
+            ]}
+            onPress={handleSearch}
+            disabled={!networkConnected}
+          >
             <Icon name="search" size={20} color="#FFF" />
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Offline Banner */}
+      {!networkConnected && (
+        <View style={styles.offlineBanner}>
+          <Icon name="cloud-offline" size={16} color="#FFF" />
+          <Text style={styles.offlineBannerText}>{i18n.t("offlineMode")}</Text>
+        </View>
+      )}
 
       {/* Highlighted Search Result Panel (under the search bar) */}
       {currentMatch && (
@@ -629,6 +734,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
   },
+  disabledButton: {
+    backgroundColor: "#CCCCCC",
+  },
   snippetContainer: {
     backgroundColor: "#f0f0f0",
     padding: 10,
@@ -702,5 +810,19 @@ const styles = StyleSheet.create({
   retryText: {
     color: "white",
     fontWeight: "bold",
+  },
+  offlineBanner: {
+    flexDirection: "row",
+    backgroundColor: "#FF9800",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  offlineBannerText: {
+    color: "white",
+    marginLeft: 5,
+    fontWeight: "bold",
+    fontSize: 12,
   },
 });

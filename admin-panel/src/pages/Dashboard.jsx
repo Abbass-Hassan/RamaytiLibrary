@@ -11,20 +11,20 @@ export default function Dashboard() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
+  // State for books and sections
   const [books, setBooks] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Form states
-  const [title, setTitle] = useState("");
-  const [file, setFile] = useState(null);
-  const [sections, setSections] = useState([{ name: "", page: "" }]);
+  // Book form state
+  const [newBookTitle, setNewBookTitle] = useState("");
+  const [bookImage, setBookImage] = useState(null);
 
-  // Section editing states
-  const [editingSections, setEditingSections] = useState(false);
-  const [editedSections, setEditedSections] = useState([]);
+  // Section form states
+  const [sectionName, setSectionName] = useState("");
+  const [sectionFile, setSectionFile] = useState(null);
 
   // Fetch books on component mount
   useEffect(() => {
@@ -35,6 +35,7 @@ export default function Dashboard() {
     try {
       setLoading(true);
       const response = await axios.get(`${API_URL}/admin/books`);
+      console.log("Fetched books:", response.data);
       setBooks(response.data.data);
       setLoading(false);
     } catch (error) {
@@ -53,79 +54,82 @@ export default function Dashboard() {
     }
   }
 
-  // Handle file input change
+  // Handle file input change for sections
   function handleFileChange(e) {
     const selectedFile = e.target.files[0];
     if (selectedFile && selectedFile.type === "application/pdf") {
-      setFile(selectedFile);
+      setSectionFile(selectedFile);
       setError("");
     } else {
-      setFile(null);
+      setSectionFile(null);
       setError("Please select a valid PDF file");
     }
   }
 
-  // Handle section input change
-  function handleSectionChange(index, field, value) {
-    const updatedSections = [...sections];
-    updatedSections[index][field] = value;
-    setSections(updatedSections);
+  // Handle image input change for book cover
+  function handleImageChange(e) {
+    const selectedFile = e.target.files[0];
+    if (selectedFile && selectedFile.type.startsWith("image/")) {
+      setBookImage(selectedFile);
+      setError("");
+      console.log(
+        "Image selected:",
+        selectedFile.name,
+        selectedFile.type,
+        selectedFile.size
+      );
+    } else {
+      setBookImage(null);
+      setError("Please select a valid image file");
+    }
   }
 
-  // Add new section
-  function addSection() {
-    setSections([...sections, { name: "", page: "" }]);
-  }
-
-  // Remove section
-  function removeSection(index) {
-    const updatedSections = [...sections];
-    updatedSections.splice(index, 1);
-    setSections(updatedSections);
-  }
-
-  // Handle form submission
-  async function handleSubmit(e) {
+  // Create a new book (title and image)
+  async function handleCreateBook(e) {
     e.preventDefault();
 
-    if (!file) {
-      setError("Please select a PDF file");
-      return;
-    }
-
-    if (!title.trim()) {
+    if (!newBookTitle.trim()) {
       setError("Please enter a book title");
       return;
     }
 
-    // Validate sections
-    const validSections = sections
-      .filter((section) => section.name.trim() && section.page)
-      .map((section) => ({
-        name: section.name.trim(),
-        page: parseInt(section.page, 10),
-      }));
+    if (!bookImage) {
+      setError("Please select a cover image");
+      return;
+    }
 
     try {
       setLoading(true);
       setError("");
 
       const formData = new FormData();
-      formData.append("pdf", file);
-      formData.append("title", title);
-      formData.append("sections", JSON.stringify(validSections));
+      formData.append("title", newBookTitle);
+      formData.append("image", bookImage);
 
-      await axios.post(`${API_URL}/admin/books`, formData, {
+      // Debug logging
+      console.log("FormData contents:");
+      for (let pair of formData.entries()) {
+        console.log(
+          pair[0],
+          pair[1] instanceof File
+            ? `File: ${pair[1].name}, size: ${pair[1].size}, type: ${pair[1].type}`
+            : pair[1]
+        );
+      }
+
+      console.log("Sending request to:", `${API_URL}/admin/books`);
+      const response = await axios.post(`${API_URL}/admin/books`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
 
+      console.log("Create book response:", response.data);
+
       // Reset form
-      setTitle("");
-      setFile(null);
-      setSections([{ name: "", page: "" }]);
-      setSuccess("Book uploaded successfully!");
+      setNewBookTitle("");
+      setBookImage(null);
+      setSuccess("Book created successfully!");
 
       // Refresh books list
       fetchBooks();
@@ -138,73 +142,80 @@ export default function Dashboard() {
       setLoading(false);
     } catch (error) {
       setLoading(false);
-      setError("Failed to upload book. Please try again.");
-      console.error(error);
+      console.error(
+        "Create book error:",
+        error.response?.data || error.message
+      );
+      setError(
+        "Failed to create book. " +
+          (error.response?.data?.message || "Please try again.")
+      );
     }
   }
 
-  // View book details
-  function viewBook(book) {
-    setSelectedBook(book);
-    setEditingSections(false);
-    setEditedSections(book.sections || []);
-  }
+  // Add section to a book
+  async function handleAddSection(e) {
+    e.preventDefault();
 
-  // Edit book sections
-  function startEditingSections() {
-    setEditingSections(true);
-    setEditedSections(selectedBook.sections || []);
-  }
+    if (!selectedBook) {
+      setError("No book selected");
+      return;
+    }
 
-  // Handle edited section change
-  function handleEditedSectionChange(index, field, value) {
-    const updatedSections = [...editedSections];
-    updatedSections[index][field] = value;
-    setEditedSections(updatedSections);
-  }
+    if (!sectionFile) {
+      setError("Please select a PDF file");
+      return;
+    }
 
-  // Add new section to edited sections
-  function addEditedSection() {
-    setEditedSections([...editedSections, { name: "", page: "" }]);
-  }
-
-  // Remove section from edited sections
-  function removeEditedSection(index) {
-    const updatedSections = [...editedSections];
-    updatedSections.splice(index, 1);
-    setEditedSections(updatedSections);
-  }
-
-  // Save edited sections
-  async function saveEditedSections() {
-    // Validate sections
-    const validSections = editedSections
-      .filter((section) => section.name.trim() && section.page)
-      .map((section) => ({
-        name: section.name.trim(),
-        page: parseInt(section.page, 10),
-      }));
+    if (!sectionName.trim()) {
+      setError("Please enter a section name");
+      return;
+    }
 
     try {
       setLoading(true);
       setError("");
 
-      await axios.put(`${API_URL}/admin/books/${selectedBook.id}/sections`, {
-        sections: validSections,
-      });
+      const formData = new FormData();
+      formData.append("pdf", sectionFile);
+      formData.append("name", sectionName);
 
-      setSuccess("Sections updated successfully!");
-      setEditingSections(false);
+      // Debug logging
+      console.log("Section FormData contents:");
+      for (let pair of formData.entries()) {
+        console.log(
+          pair[0],
+          pair[1] instanceof File
+            ? `File: ${pair[1].name}, size: ${pair[1].size}, type: ${pair[1].type}`
+            : pair[1]
+        );
+      }
 
-      // Update local state
-      const updatedSelectedBook = { ...selectedBook, sections: validSections };
-      setSelectedBook(updatedSelectedBook);
-
-      // Update books list
-      const updatedBooks = books.map((book) =>
-        book.id === selectedBook.id ? updatedSelectedBook : book
+      const response = await axios.post(
+        `${API_URL}/admin/books/${selectedBook.id}/sections`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
       );
-      setBooks(updatedBooks);
+
+      console.log("Add section response:", response.data);
+
+      // Reset form
+      setSectionName("");
+      setSectionFile(null);
+      setSuccess("Section added successfully!");
+
+      // Refresh book details
+      const bookResponse = await axios.get(
+        `${API_URL}/admin/books/${selectedBook.id}`
+      );
+      setSelectedBook(bookResponse.data.data);
+
+      // Refresh books list for sidebar
+      fetchBooks();
 
       // Clear success message after 3 seconds
       setTimeout(() => {
@@ -214,14 +225,30 @@ export default function Dashboard() {
       setLoading(false);
     } catch (error) {
       setLoading(false);
-      setError("Failed to update sections. Please try again.");
-      console.error(error);
+      console.error(
+        "Add section error:",
+        error.response?.data || error.message
+      );
+      setError(
+        "Failed to add section. " +
+          (error.response?.data?.message || "Please try again.")
+      );
     }
+  }
+
+  // View book details
+  function viewBook(book) {
+    console.log("Viewing book:", book);
+    setSelectedBook(book);
   }
 
   // Delete book
   async function deleteBook(id) {
-    if (!window.confirm("Are you sure you want to delete this book?")) {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this book? This will also delete all associated sections."
+      )
+    ) {
       return;
     }
 
@@ -248,15 +275,60 @@ export default function Dashboard() {
       setLoading(false);
     } catch (error) {
       setLoading(false);
-      setError("Failed to delete book. Please try again.");
-      console.error(error);
+      console.error(
+        "Delete book error:",
+        error.response?.data || error.message
+      );
+      setError(
+        "Failed to delete book. " +
+          (error.response?.data?.message || "Please try again.")
+      );
+    }
+  }
+
+  // Delete section
+  async function deleteSection(sectionId) {
+    if (!window.confirm("Are you sure you want to delete this section?")) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await axios.delete(
+        `${API_URL}/admin/books/${selectedBook.id}/sections/${sectionId}`
+      );
+
+      setSuccess("Section deleted successfully!");
+
+      // Refresh book details
+      const response = await axios.get(
+        `${API_URL}/admin/books/${selectedBook.id}`
+      );
+      setSelectedBook(response.data.data);
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+      console.error(
+        "Delete section error:",
+        error.response?.data || error.message
+      );
+      setError(
+        "Failed to delete section. " +
+          (error.response?.data?.message || "Please try again.")
+      );
     }
   }
 
   // Back to book list
   function closeBookDetails() {
     setSelectedBook(null);
-    setEditingSections(false);
   }
 
   return (
@@ -277,6 +349,7 @@ export default function Dashboard() {
       <main className="dashboard-content">
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
+
         {/* Horizontal layout container */}
         {!selectedBook && (
           <div className="dashboard-horizontal-layout">
@@ -285,13 +358,26 @@ export default function Dashboard() {
               <h2>Books Library</h2>
               {loading && <p className="loading-message">Loading books...</p>}
               {!loading && books.length === 0 ? (
-                <p className="empty-message">No books uploaded yet.</p>
+                <p className="empty-message">No books created yet.</p>
               ) : (
                 <div className="books-list">
                   {books.map((book) => (
                     <div key={book.id} className="book-item">
                       <div className="book-info">
                         <h3>{book.title}</h3>
+                        {book.imagePath && (
+                          <img
+                            src={`${API_URL}${book.imagePath}`}
+                            alt={book.title}
+                            className="book-cover-thumbnail"
+                            onError={(e) => {
+                              console.error("Image load error:", e);
+                              e.target.src =
+                                "https://via.placeholder.com/80x120?text=No+Image";
+                              e.target.alt = "Image not found";
+                            }}
+                          />
+                        )}
                         <p>
                           Sections: {book.sections ? book.sections.length : 0}
                         </p>
@@ -316,82 +402,51 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Upload form on the right */}
+            {/* Create new book form on the right */}
             <div className="dashboard-card upload-card">
-              <h2>Upload New Book</h2>
-              <form onSubmit={handleSubmit} className="upload-form">
+              <h2>Create New Book</h2>
+              <form onSubmit={handleCreateBook} className="upload-form">
                 <div className="form-group">
                   <label htmlFor="title">Book Title</label>
                   <input
                     type="text"
                     id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    value={newBookTitle}
+                    onChange={(e) => setNewBookTitle(e.target.value)}
                     placeholder="Enter book title"
                     required
                   />
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="pdf">PDF File</label>
+                  <label htmlFor="bookImage">Cover Image</label>
                   <input
                     type="file"
-                    id="pdf"
-                    accept=".pdf"
-                    onChange={handleFileChange}
+                    id="bookImage"
+                    accept="image/*"
+                    onChange={handleImageChange}
                     required
                   />
-                </div>
-
-                <div className="form-group">
-                  <label>Sections</label>
-                  <div className="sections-container">
-                    {sections.map((section, index) => (
-                      <div key={index} className="section-row">
-                        <input
-                          type="text"
-                          value={section.name}
-                          onChange={(e) =>
-                            handleSectionChange(index, "name", e.target.value)
-                          }
-                          placeholder="Section name"
-                        />
-                        <input
-                          type="number"
-                          value={section.page}
-                          onChange={(e) =>
-                            handleSectionChange(index, "page", e.target.value)
-                          }
-                          placeholder="Page"
-                          min="1"
-                        />
-                        <button
-                          type="button"
-                          className="remove-btn"
-                          onClick={() => removeSection(index)}
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="add-section-btn"
-                      onClick={addSection}
-                    >
-                      + Add Section
-                    </button>
-                  </div>
+                  {bookImage && (
+                    <div className="image-preview">
+                      <img
+                        src={URL.createObjectURL(bookImage)}
+                        alt="Book cover preview"
+                        className="cover-preview"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <button type="submit" className="submit-btn" disabled={loading}>
-                  {loading ? "Uploading..." : "Upload Book"}
+                  {loading ? "Creating..." : "Create Book"}
                 </button>
               </form>
             </div>
           </div>
         )}
-        {/* Book details view */}
+
+        {/* Book details and add section view */}
         {selectedBook && (
           <div className="dashboard-container">
             <div className="dashboard-card book-details-card">
@@ -400,123 +455,92 @@ export default function Dashboard() {
                   &larr; Back to books
                 </button>
                 <h2>{selectedBook.title}</h2>
+                {selectedBook.imagePath && (
+                  <img
+                    src={`${API_URL}${selectedBook.imagePath}`}
+                    alt={selectedBook.title}
+                    className="book-cover-large"
+                    onError={(e) => {
+                      console.error("Image load error:", e);
+                      e.target.src =
+                        "https://via.placeholder.com/150x225?text=No+Image";
+                      e.target.alt = "Image not found";
+                    }}
+                  />
+                )}
               </div>
 
               <div className="book-details">
-                <div className="book-details-row">
-                  <span className="detail-label">PDF:</span>
-                  <a
-                    href={`http://localhost:3000${selectedBook.pdfPath}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="pdf-link"
-                  >
-                    View PDF
-                  </a>
-                </div>
-
-                <div className="book-details-row">
-                  <span className="detail-label">Uploaded:</span>
-                  <span>
-                    {selectedBook.uploadedAt
-                      ? new Date(
-                          selectedBook.uploadedAt.seconds * 1000
-                        ).toLocaleString()
-                      : "N/A"}
-                  </span>
-                </div>
-
                 <div className="sections-header">
                   <h3>Sections</h3>
-                  {!editingSections ? (
-                    <button className="edit-btn" onClick={startEditingSections}>
-                      Edit Sections
-                    </button>
+                </div>
+
+                {/* Display sections */}
+                <div className="sections-list">
+                  {selectedBook.sections && selectedBook.sections.length > 0 ? (
+                    <ul>
+                      {selectedBook.sections.map((section) => (
+                        <li key={section.id} className="section-item">
+                          <div className="section-info">
+                            <span className="section-name">{section.name}</span>
+                            <a
+                              href={`${API_URL}${section.pdfPath}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="pdf-link"
+                            >
+                              View PDF
+                            </a>
+                          </div>
+                          <button
+                            className="delete-btn"
+                            onClick={() => deleteSection(section.id)}
+                          >
+                            Delete
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
-                    <button
-                      className="save-btn"
-                      onClick={saveEditedSections}
-                      disabled={loading}
-                    >
-                      {loading ? "Saving..." : "Save Changes"}
-                    </button>
+                    <p>No sections added to this book yet</p>
                   )}
                 </div>
 
-                {!editingSections ? (
-                  <div className="sections-list">
-                    {selectedBook.sections &&
-                    selectedBook.sections.length > 0 ? (
-                      <ul>
-                        {selectedBook.sections.map((section, index) => (
-                          <li key={index}>
-                            <span className="section-name">{section.name}</span>
-                            <span className="section-page">
-                              Page {section.page}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p>No sections defined</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="sections-container">
-                    {editedSections.map((section, index) => (
-                      <div key={index} className="section-row">
-                        <input
-                          type="text"
-                          value={section.name}
-                          onChange={(e) =>
-                            handleEditedSectionChange(
-                              index,
-                              "name",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Section name"
-                        />
-                        <input
-                          type="number"
-                          value={section.page}
-                          onChange={(e) =>
-                            handleEditedSectionChange(
-                              index,
-                              "page",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Page"
-                          min="1"
-                        />
-                        <button
-                          type="button"
-                          className="remove-btn"
-                          onClick={() => removeEditedSection(index)}
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="add-section-btn"
-                      onClick={addEditedSection}
-                    >
-                      + Add Section
-                    </button>
-                  </div>
-                )}
+                {/* Add new section form */}
+                <div className="add-section-form">
+                  <h3>Add New Section</h3>
+                  <form onSubmit={handleAddSection}>
+                    <div className="form-group">
+                      <label htmlFor="sectionName">Section Name</label>
+                      <input
+                        type="text"
+                        id="sectionName"
+                        value={sectionName}
+                        onChange={(e) => setSectionName(e.target.value)}
+                        placeholder="Enter section name"
+                        required
+                      />
+                    </div>
 
-                <div className="book-actions">
-                  <button
-                    className="delete-btn"
-                    onClick={() => deleteBook(selectedBook.id)}
-                    disabled={loading}
-                  >
-                    Delete Book
-                  </button>
+                    <div className="form-group">
+                      <label htmlFor="sectionPdf">PDF File</label>
+                      <input
+                        type="file"
+                        id="sectionPdf"
+                        accept=".pdf"
+                        onChange={handleFileChange}
+                        required
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="submit-btn"
+                      disabled={loading}
+                    >
+                      {loading ? "Adding..." : "Add Section"}
+                    </button>
+                  </form>
                 </div>
               </div>
             </div>

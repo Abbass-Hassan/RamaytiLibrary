@@ -486,3 +486,98 @@
     max-height: none;
   }
 }
+
+/* Book cover thumbnail in book list */
+.book-cover-thumbnail {
+  width: 80px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Larger book cover in book details */
+.book-cover-large {
+  width: 150px;
+  height: 225px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin: 10px 0;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  display: block;
+}
+
+/* Image preview in the create book form */
+.image-preview {
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+
+.cover-preview {
+  max-width: 100px;
+  max-height: 150px;
+  object-fit: cover;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Book item layout improvements */
+.book-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.book-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.book-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Book details header with image */
+.book-details-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+/* Section item improvements */
+.section-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+
+.section-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.section-name {
+  font-weight: 500;
+}
+
+.pdf-link {
+  color: #4a90e2;
+  text-decoration: none;
+}
+
+.pdf-link:hover {
+  text-decoration: underline;
+}

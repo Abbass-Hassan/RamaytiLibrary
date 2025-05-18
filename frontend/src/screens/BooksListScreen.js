@@ -9,15 +9,70 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  LogBox,
 } from "react-native";
 import colors from "../config/colors";
 import { useRoute } from "@react-navigation/native";
 import NetInfo from "@react-native-community/netinfo";
 import { useTranslation } from "react-i18next";
 import { I18nManager } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Working API endpoint based on our tests
-const API_URL = "http://ramaytilibrary-production.up.railway.app/api/books";
+// Ignore network errors in the console
+LogBox.ignoreLogs(["Fetch error", "Network request failed", "Server error"]);
+
+// Base URL for the API
+const BASE_URL = "https://ramaytilibrary-production.up.railway.app";
+const API_ENDPOINT = `${BASE_URL}/api/books`;
+
+// Mock data to use when server is unavailable
+const MOCK_BOOKS = [
+  {
+    id: "book1",
+    title: "كتاب ١",
+    sections: [
+      {
+        id: "book1_section1",
+        name: "المجلد الأول",
+        pdfPath: "/files/174534127-92879.pdf",
+        fileName: "174534127-92879.pdf",
+      },
+      {
+        id: "book1_section2",
+        name: "المجلد الثاني",
+        pdfPath: "/files/174534175-95989.pdf",
+        fileName: "174534175-95989.pdf",
+      },
+    ],
+    imagePath: null,
+  },
+  {
+    id: "book2",
+    title: "كتاب ٢",
+    sections: [
+      {
+        id: "book2_section1",
+        name: "المجلد الأول",
+        pdfPath: "/files/174568508-65869.pdf",
+        fileName: "174568508-65869.pdf",
+      },
+    ],
+    imagePath: null,
+  },
+  {
+    id: "book3",
+    title: "كتاب ٣",
+    sections: [
+      {
+        id: "book3_section1",
+        name: "المجلد الأول",
+        pdfPath: "/files/arabic_text_test.pdf",
+        fileName: "arabic_text_test.pdf",
+      },
+    ],
+    imagePath: null,
+  },
+];
 
 // Helper function to convert numbers to Arabic numerals
 const toArabicNumeral = (num) => {
@@ -40,10 +95,61 @@ const BooksListScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [usingMockData, setUsingMockData] = useState(false);
   const route = useRoute();
 
   // Determine if we're in DirectTab by checking the parent route name
   const isDirectTab = route.name === "DirectBooksListScreen";
+
+  // Save books to local storage for offline access
+  const saveBooks = async (booksData) => {
+    try {
+      await AsyncStorage.setItem(
+        "cachedBooks",
+        JSON.stringify({
+          timestamp: Date.now(),
+          data: booksData,
+        })
+      );
+      console.log(`Saved ${booksData.length} books to local storage`);
+    } catch (error) {
+      console.error("Error saving books to storage:", error);
+    }
+  };
+
+  // Get cached books from local storage
+  const getCachedBooks = async () => {
+    try {
+      const storedData = await AsyncStorage.getItem("cachedBooks");
+      if (storedData) {
+        const parsedData = JSON.parse(storedData);
+        console.log(
+          `Retrieved ${
+            parsedData.data.length
+          } cached books, stored at ${new Date(parsedData.timestamp)}`
+        );
+        return parsedData.data;
+      }
+      return null;
+    } catch (error) {
+      console.error("Error getting books from storage:", error);
+      return null;
+    }
+  };
+
+  // Check if server is actually reachable
+  const isServerReachable = async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/api/test`, {
+        method: "GET",
+        timeout: 5000,
+      });
+      return response.ok;
+    } catch (error) {
+      console.log("Server connectivity test failed:", error.message);
+      return false;
+    }
+  };
 
   // Check network connectivity
   useEffect(() => {
@@ -67,41 +173,182 @@ const BooksListScreen = ({ navigation }) => {
 
       // Check if we're online first
       const networkState = await NetInfo.fetch();
-      if (!networkState.isConnected) {
-        setIsOffline(true);
+      const isConnected = networkState.isConnected;
+      setIsOffline(!isConnected);
+
+      // Try to get cached books
+      const cachedBooks = await getCachedBooks();
+
+      // If we're offline, use cached books or mock data
+      if (!isConnected) {
         setLoading(false);
-        setError(t("noInternet"));
+
+        if (cachedBooks && cachedBooks.length > 0) {
+          console.log("Using cached books in offline mode");
+          setBooks(cachedBooks);
+          setUsingMockData(false);
+        } else {
+          console.log("No cached books available, using mock data");
+          const processedMockBooks = processMockBooks(MOCK_BOOKS);
+          setBooks(processedMockBooks);
+          setUsingMockData(true);
+          saveBooks(processedMockBooks); // Save mock books to cache
+        }
         return;
       }
 
-      console.log("Fetching books from:", API_URL);
+      // Let's try to fetch data from the API endpoint with additional logging
+      try {
+        console.log("Attempting to fetch books from HTTPS API:", API_ENDPOINT);
 
-      const response = await fetch(API_URL, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-        },
-        timeout: 10000, // 10 second timeout
-      });
+        // Try main API endpoint with HTTPS
+        const response = await fetch(API_ENDPOINT, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        });
 
-      if (!response.ok) {
-        throw new Error(`${t("serverError")}: ${response.status}`);
+        console.log("API response status:", response.status);
+        console.log("API response headers:", JSON.stringify(response.headers));
+
+        if (!response.ok) {
+          // Try the admin endpoint as fallback
+          console.log("Main API endpoint failed, trying admin endpoint");
+          const adminEndpoint = `${BASE_URL}/api/admin/books`;
+          console.log("Trying admin endpoint:", adminEndpoint);
+
+          const adminResponse = await fetch(adminEndpoint, {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            timeout: 10000,
+          });
+
+          console.log("Admin API response status:", adminResponse.status);
+
+          if (!adminResponse.ok) {
+            throw new Error(
+              `All API endpoints failed. Main: ${response.status}, Admin: ${adminResponse.status}`
+            );
+          }
+
+          const adminData = await adminResponse.json();
+          console.log("Admin data received:", adminData ? "Yes" : "No");
+
+          if (adminData && adminData.success && adminData.data) {
+            console.log(
+              `Found ${adminData.data.length} books in admin response`
+            );
+
+            // Process the admin data
+            const processedBooks = adminData.data.map(processBook);
+            setBooks(processedBooks);
+            saveBooks(processedBooks);
+            setUsingMockData(false);
+            return;
+          } else {
+            throw new Error("Admin endpoint returned invalid data format");
+          }
+        }
+
+        // Process response from main endpoint
+        const data = await response.json();
+        console.log("Main API response:", data ? "Data received" : "No data");
+
+        // Process the data
+        const processedBooks = Array.isArray(data)
+          ? data.map(processBook)
+          : data.data && Array.isArray(data.data)
+          ? data.data.map(processBook)
+          : [];
+
+        console.log(`Processed ${processedBooks.length} books`);
+
+        if (processedBooks.length > 0) {
+          setBooks(processedBooks);
+          saveBooks(processedBooks);
+          setUsingMockData(false);
+        } else {
+          // No books returned, use mock data
+          const processedMockBooks = processMockBooks(MOCK_BOOKS);
+          setBooks(processedMockBooks);
+          setUsingMockData(true);
+          saveBooks(processedMockBooks);
+          setError("No books found on server. Using sample books.");
+        }
+      } catch (apiError) {
+        console.error("API fetch error details:", apiError.message);
+
+        // Handle the error by using cached or mock data
+        if (cachedBooks && cachedBooks.length > 0) {
+          setBooks(cachedBooks);
+          setUsingMockData(false);
+        } else {
+          const processedMockBooks = processMockBooks(MOCK_BOOKS);
+          setBooks(processedMockBooks);
+          setUsingMockData(true);
+          saveBooks(processedMockBooks);
+        }
+
+        setError(`Server error: ${apiError.message}. Using local books.`);
       }
-
-      const data = await response.json();
-      console.log("Books fetched successfully:", data.length || 0);
-      setBooks(data);
     } catch (error) {
-      console.error("Error fetching books:", error.message);
+      console.error("General error in fetchBooks:", error.message);
       setError(error.message);
 
-      Alert.alert(t("errorTitle"), `${t("errorLoading")}: ${error.message}`);
+      // Try to use cached books or mock data as fallback
+      const cachedBooks = await getCachedBooks();
+      if (cachedBooks && cachedBooks.length > 0) {
+        setBooks(cachedBooks);
+        setUsingMockData(false);
+      } else {
+        const processedMockBooks = processMockBooks(MOCK_BOOKS);
+        setBooks(processedMockBooks);
+        setUsingMockData(true);
+        saveBooks(processedMockBooks);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  // Process a book from the API
+  const processBook = (book) => {
+    return {
+      ...book,
+      // Make sure sections is always an array
+      sections: book.sections || [],
+      // Add coverImageUrl
+      coverImageUrl: book.imagePath
+        ? book.imagePath.startsWith("http")
+          ? book.imagePath
+          : `${BASE_URL}${book.imagePath}`
+        : null,
+    };
+  };
+
+  // Process mock books to add full URLs and other properties
+  const processMockBooks = (mockBooks) => {
+    return mockBooks.map((book) => ({
+      ...book,
+      id: book.id || String(Date.now() + Math.random()),
+      // Make sure sections is always an array
+      sections: book.sections || [],
+      // Add coverImageUrl
+      coverImageUrl: book.imagePath
+        ? book.imagePath.startsWith("http")
+          ? book.imagePath
+          : `${BASE_URL}${book.imagePath}`
+        : null,
+      // Add properties to identify that this is mock data
+      isMockData: true,
+    }));
   };
 
   const onRefresh = () => {
@@ -114,27 +361,68 @@ const BooksListScreen = ({ navigation }) => {
   }, []);
 
   const handleBookPress = (book) => {
-    if (isDirectTab) {
+    if (book.sections && book.sections.length > 0) {
+      // If the book has sections (volumes), navigate to volumes screen
+      navigation.navigate("BookVolumesScreen", {
+        book: book,
+        bookId: book.id,
+        bookTitle: book.title,
+      });
+    } else if (isDirectTab) {
+      // Direct PDF view if there are no sections or in DirectTab
       navigation.navigate("CustomPdfReader", {
         bookId: book.id,
         bookTitle: book.title,
         page: 1,
+        pdfFilename: book.pdfFilename || getFilenameFromPath(book.pdfPath),
       });
     } else {
-      // In other tabs (like SectionsTab), go to SectionsScreen
+      // Fallback to old sections screen if needed
       navigation.navigate("SectionsScreen", { bookId: book.id });
     }
+  };
+
+  // Helper to extract filename from path
+  const getFilenameFromPath = (path) => {
+    if (!path) return null;
+    const parts = path.split("/");
+    return parts[parts.length - 1];
   };
 
   const renderItem = ({ item, index }) => (
     <TouchableOpacity onPress={() => handleBookPress(item)} style={styles.card}>
       <View style={styles.coverContainer}>
-        <Image
-          source={require("../assets/book-cover.png")}
-          style={styles.coverImage}
-          resizeMode="cover"
-        />
-        <Text style={styles.volumeNumber}>{toArabicNumeral(index + 1)}</Text>
+        {item.coverImageUrl ? (
+          <Image
+            source={{ uri: item.coverImageUrl }}
+            style={styles.coverImage}
+            resizeMode="cover"
+            defaultSource={require("../assets/book-cover.png")}
+          />
+        ) : (
+          <Image
+            source={require("../assets/book-cover.png")}
+            style={styles.coverImage}
+            resizeMode="cover"
+          />
+        )}
+        <View style={styles.titleOverlay}>
+          <Text style={styles.bookTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+        </View>
+        {item.sections && item.sections.length > 0 && (
+          <View style={styles.sectionsIndicator}>
+            <Text style={styles.sectionsCount}>
+              {toArabicNumeral(item.sections.length)} {t("volumes")}
+            </Text>
+          </View>
+        )}
+        {(item.isMockData || isOffline) && (
+          <View style={styles.mockBadge}>
+            <Text style={styles.mockBadgeText}>{t("offline")}</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -148,32 +436,21 @@ const BooksListScreen = ({ navigation }) => {
     );
   }
 
-  if (isOffline) {
-    return (
-      <View style={styles.centeredContainer}>
-        <Text style={styles.errorText}>{t("offline")}</Text>
-        <Text style={styles.errorSubtext}>{t("checkConnection")}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchBooks}>
-          <Text style={styles.retryButtonText}>{t("retry")}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (error && books.length === 0) {
-    return (
-      <View style={styles.centeredContainer}>
-        <Text style={styles.errorText}>{t("errorLoading")}</Text>
-        <Text style={styles.errorSubtext}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchBooks}>
-          <Text style={styles.retryButtonText}>{t("retry")}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineBannerText}>{t("offlineMode")}</Text>
+        </View>
+      )}
+      {error && (
+        <TouchableOpacity
+          style={styles.errorBanner}
+          onPress={() => setError(null)}
+        >
+          <Text style={styles.errorBannerText}>{error}</Text>
+        </TouchableOpacity>
+      )}
       <FlatList
         data={books}
         keyExtractor={(item) => item.id.toString()}
@@ -201,7 +478,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 20,
+    paddingTop: 10,
   },
   centeredContainer: {
     flex: 1,
@@ -214,30 +491,25 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: colors.text,
+    textAlign: "center",
   },
-  errorText: {
-    fontSize: 18,
+  errorBanner: {
+    backgroundColor: "#ffcdd2",
+    padding: 5,
+    alignItems: "center",
+  },
+  errorBannerText: {
+    color: "#b71c1c",
     fontWeight: "bold",
-    color: "red",
-    marginBottom: 10,
-    textAlign: "center",
   },
-  errorSubtext: {
-    fontSize: 16,
-    color: colors.text,
-    textAlign: "center",
-    marginBottom: 20,
+  offlineBanner: {
+    backgroundColor: "#ff9800",
+    padding: 5,
+    alignItems: "center",
   },
-  retryButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
+  offlineBannerText: {
     color: "white",
-    fontSize: 16,
-    fontWeight: "500",
+    fontWeight: "bold",
   },
   listContainer: {
     paddingBottom: 20,
@@ -267,16 +539,53 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  volumeNumber: {
+  titleOverlay: {
     position: "absolute",
-    bottom: 10,
-    alignSelf: "center",
-    fontSize: 26,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    padding: 8,
+  },
+  bookTitle: {
+    fontSize: 14,
     fontWeight: "bold",
     color: "white",
-    textShadowColor: "rgba(0, 0, 0, 0.75)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textAlign: "center",
+  },
+  sectionsIndicator: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  sectionsCount: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  mockBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "#ff9800",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  mockBadgeText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  emptyText: {
+    textAlign: "center",
+    fontSize: 16,
+    color: colors.text,
+    marginTop: 40,
   },
 });
 
