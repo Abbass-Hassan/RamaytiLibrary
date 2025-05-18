@@ -26,55 +26,6 @@ LogBox.ignoreLogs(["Fetch error", "Network request failed", "Server error"]);
 const BASE_URL = "https://ramaytilibrary-production.up.railway.app";
 const API_ENDPOINT = `${BASE_URL}/api/books`;
 
-// Mock data to use when server is unavailable
-const MOCK_BOOKS = [
-  {
-    id: "book1",
-    title: "كتاب ١",
-    sections: [
-      {
-        id: "book1_section1",
-        name: "المجلد الأول",
-        pdfPath: "/files/174534127-92879.pdf",
-        fileName: "174534127-92879.pdf",
-      },
-      {
-        id: "book1_section2",
-        name: "المجلد الثاني",
-        pdfPath: "/files/174534175-95989.pdf",
-        fileName: "174534175-95989.pdf",
-      },
-    ],
-    imagePath: null,
-  },
-  {
-    id: "book2",
-    title: "كتاب ٢",
-    sections: [
-      {
-        id: "book2_section1",
-        name: "المجلد الأول",
-        pdfPath: "/files/174568508-65869.pdf",
-        fileName: "174568508-65869.pdf",
-      },
-    ],
-    imagePath: null,
-  },
-  {
-    id: "book3",
-    title: "كتاب ٣",
-    sections: [
-      {
-        id: "book3_section1",
-        name: "المجلد الأول",
-        pdfPath: "/files/arabic_text_test.pdf",
-        fileName: "arabic_text_test.pdf",
-      },
-    ],
-    imagePath: null,
-  },
-];
-
 // Helper function to convert numbers to Arabic numerals
 const toArabicNumeral = (num) => {
   const arabicNumerals = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
@@ -191,7 +142,7 @@ const BooksListScreen = ({ navigation }) => {
         setLoading(false);
       }
 
-      // If we're offline, only use cached/mock data and don't try API
+      // If we're offline, only use cached data and don't try API
       if (!isConnected) {
         setLoading(false);
 
@@ -200,11 +151,10 @@ const BooksListScreen = ({ navigation }) => {
           setBooks(cachedBooks);
           setUsingMockData(false);
         } else {
-          console.log("Offline: Using mock books");
-          const processedMockBooks = processMockBooks(MOCK_BOOKS);
-          setBooks(processedMockBooks);
-          setUsingMockData(true);
-          saveBooks(processedMockBooks);
+          console.log("Offline: No cached books available");
+          setError(
+            "No books available offline. Please connect to the internet."
+          );
         }
         return; // Important: Return early to avoid any API calls
       }
@@ -258,40 +208,27 @@ const BooksListScreen = ({ navigation }) => {
           saveBooks(processedBooks);
           setUsingMockData(false);
         } else if (!cachedBooks || cachedBooks.length === 0) {
-          // Only use mock if we didn't have cached books
-          const processedMockBooks = processMockBooks(MOCK_BOOKS);
-          setBooks(processedMockBooks);
-          setUsingMockData(true);
-          saveBooks(processedMockBooks);
-          setError("No books found on server. Using sample books.");
+          setError("No books found on server.");
         }
       } catch (apiError) {
         console.error("API fetch error:", apiError.message);
 
         // We already showed cached books, so just log the error
         if (!cachedBooks || cachedBooks.length === 0) {
-          // Only use mock if we didn't have cached books
-          const processedMockBooks = processMockBooks(MOCK_BOOKS);
-          setBooks(processedMockBooks);
-          setUsingMockData(true);
-          saveBooks(processedMockBooks);
-          setError(`Server error: ${apiError.message}. Using local books.`);
+          setError(
+            `Server error: ${apiError.message}. Please try again later.`
+          );
         }
       }
     } catch (error) {
       console.error("General error in fetchBooks:", error.message);
       setError(error.message);
 
-      // Try to use cached books or mock data as fallback
+      // Try to use cached books as fallback
       const cachedBooks = await getCachedBooks();
       if (cachedBooks && cachedBooks.length > 0) {
         setBooks(cachedBooks);
         setUsingMockData(false);
-      } else {
-        const processedMockBooks = processMockBooks(MOCK_BOOKS);
-        setBooks(processedMockBooks);
-        setUsingMockData(true);
-        saveBooks(processedMockBooks);
       }
     } finally {
       setLoading(false);
@@ -312,24 +249,6 @@ const BooksListScreen = ({ navigation }) => {
           : `${BASE_URL}${book.imagePath}`
         : null,
     };
-  };
-
-  // Process mock books to add full URLs and other properties
-  const processMockBooks = (mockBooks) => {
-    return mockBooks.map((book) => ({
-      ...book,
-      id: book.id || String(Date.now() + Math.random()),
-      // Make sure sections is always an array
-      sections: book.sections || [],
-      // Add coverImageUrl
-      coverImageUrl: book.imagePath
-        ? book.imagePath.startsWith("http")
-          ? book.imagePath
-          : `${BASE_URL}${book.imagePath}`
-        : null,
-      // Add properties to identify that this is mock data
-      isMockData: true,
-    }));
   };
 
   const onRefresh = () => {
@@ -409,7 +328,7 @@ const BooksListScreen = ({ navigation }) => {
             </Text>
           </View>
         )}
-        {(item.isMockData || isOffline) && (
+        {isOffline && (
           <View style={styles.mockBadge}>
             <Text style={styles.mockBadgeText}>{t("offline")}</Text>
           </View>
