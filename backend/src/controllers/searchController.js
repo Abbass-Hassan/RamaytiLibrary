@@ -36,20 +36,16 @@ exports.searchPdf = async (req, res) => {
     const pages = pdfText.split("\f");
     console.log("[searchController.js] pages length:", pages.length);
 
-    // Normalize query if Arabic
-    const normalizedQuery = isArabicQuery(q)
-      ? normalizeArabicText(q)
-      : q.normalize("NFKC");
+    // Always normalize query with Arabic normalization
+    const normalizedQuery = normalizeArabicText(q);
 
     let matches = [];
 
     pages.forEach((pageText, index) => {
       const pageNumber = index + 1;
 
-      // Normalize page text if Arabic
-      const normalizedPageText = isArabicQuery(q)
-        ? normalizeArabicText(pageText)
-        : pageText.normalize("NFKC");
+      // Always normalize page text with Arabic normalization
+      const normalizedPageText = normalizeArabicText(pageText);
 
       console.log(
         `[searchController.js] Page ${pageNumber} snippet:`,
@@ -106,9 +102,8 @@ exports.searchGlobalMulti = async (req, res) => {
       books = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     }
 
-    const normalizedQuery = isArabicQuery(q)
-      ? normalizeArabicText(q)
-      : q.normalize("NFKC");
+    // Always normalize query with Arabic normalization
+    const normalizedQuery = normalizeArabicText(q);
 
     let results = [];
 
@@ -122,9 +117,8 @@ exports.searchGlobalMulti = async (req, res) => {
 
       pages.forEach((pageText, index) => {
         const pageNumber = index + 1;
-        const normalizedPageText = isArabicQuery(q)
-          ? normalizeArabicText(pageText)
-          : pageText.normalize("NFKC");
+        // Always normalize page text with Arabic normalization
+        const normalizedPageText = normalizeArabicText(pageText);
 
         const regex = new RegExp(
           `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
