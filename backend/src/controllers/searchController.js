@@ -3,29 +3,20 @@
 const admin = require("../config/firebase");
 const db = admin.firestore();
 const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
-const {
-  normalizeArabicText,
-  expandArabicCharactersToRegex,
-} = require("../textUtils");
+const { normalizeArabicText } = require("../textUtils");
 
 // Escape special regex characters
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Check if query contains Arabic
-function isArabicQuery(q) {
-  return /[\u0600-\u06FF]/.test(q);
-}
-
 exports.searchPdf = async (req, res) => {
-  try {
-    const { bookId, q } = req.query;
-    if (!bookId || !q) {
-      return res.status(400).json({ error: "Missing bookId or search query" });
-    }
+  const { bookId, q } = req.query;
+  if (!bookId || !q) {
+    return res.status(400).json({ error: "Missing bookId or search query" });
+  }
 
-    // Check if book doc exists
+  try {
     const docRef = db.collection("books").doc(bookId);
     const docSnap = await docRef.get();
     if (!docSnap.exists) {
@@ -33,66 +24,48 @@ exports.searchPdf = async (req, res) => {
     }
 
     const bookData = docSnap.data();
+    const rawText = await extractTextFromPdfUrlWithPdfJs(bookData.pdfPath);
+    const pages = rawText.split("\f");
 
-    // Extract text with PDF.js
-    const pdfText = await extractTextFromPdfUrlWithPdfJs(bookData.pdfPath);
-    const pages = pdfText.split("\f");
-    console.log("[searchController.js] pages length:", pages.length);
+    const normalizedQuery = normalizeArabicText(q);
+    const regex = new RegExp(
+      `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
+      "giu"
+    );
 
-    // Convert search query to regex pattern that matches all character variants
-    const regexPattern = expandArabicCharactersToRegex(q);
-
-    let matches = [];
-
-    pages.forEach((pageText, index) => {
-      const pageNumber = index + 1;
-
-      // No need to normalize page text - the regex will match all variants
-      console.log(
-        `[searchController.js] Page ${pageNumber} snippet:`,
-        pageText.substring(0, 60)
-      );
-
-      // Build a regex with some context, using our expanded pattern
-      const regex = new RegExp(`(.{0,30})(${regexPattern})(.{0,30})`, "giu");
-
+    const matches = [];
+    pages.forEach((pageText, idx) => {
+      const normalizedPage = normalizeArabicText(pageText);
       let match;
-      let matchCount = 0;
-      while ((match = regex.exec(pageText)) !== null) {
+      while ((match = regex.exec(normalizedPage)) !== null) {
         matches.push({
+          page: idx + 1,
           snippet: match[0],
-          page: pageNumber,
         });
-        matchCount++;
       }
-      console.log(
-        `[searchController.js] Found ${matchCount} matches on page ${pageNumber}`
-      );
     });
 
-    console.log("[searchController.js] Total matches:", matches.length);
-    res.json({ results: matches });
+    return res.json({ results: matches });
   } catch (error) {
     console.error("Error in searchPdf:", error);
-    res.status(500).json({ error: "Search failed" });
+    return res.status(500).json({ error: "Search failed" });
   }
 };
 
 exports.searchGlobalMulti = async (req, res) => {
-  try {
-    const { q, bookIds } = req.query;
-    if (!q) {
-      return res.status(400).json({ error: "Missing search query" });
-    }
+  const { q, bookIds } = req.query;
+  if (!q) {
+    return res.status(400).json({ error: "Missing search query" });
+  }
 
+  try {
     let books = [];
     if (bookIds) {
-      const ids = bookIds.split(",");
+      const ids = bookIds.split(",").map((id) => id.trim());
       for (const id of ids) {
-        const docRef = db.collection("books").doc(id.trim());
-        const docSnap = await docRef.get();
-        if (docSnap.exists) {
-          books.push({ id: docSnap.id, ...docSnap.data() });
+        const snap = await db.collection("books").doc(id).get();
+        if (snap.exists) {
+          books.push({ id: snap.id, ...snap.data() });
         }
       }
     } else {
@@ -100,40 +73,33 @@ exports.searchGlobalMulti = async (req, res) => {
       books = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     }
 
-    // Convert search query to regex pattern that matches all character variants
-    const regexPattern = expandArabicCharactersToRegex(q);
+    const normalizedQuery = normalizeArabicText(q);
+    const regex = new RegExp(
+      `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
+      "giu"
+    );
 
-    let results = [];
-
+    const results = [];
     for (const book of books) {
-      const pdfText = await extractTextFromPdfUrlWithPdfJs(book.pdfPath);
-      const pages = pdfText.split("\f");
-      console.log(
-        `[searchController.js] For book ${book.id}, pages:`,
-        pages.length
-      );
-
-      pages.forEach((pageText, index) => {
-        const pageNumber = index + 1;
-
-        // Build a regex with our expanded pattern
-        const regex = new RegExp(`(.{0,30})(${regexPattern})(.{0,30})`, "giu");
-
+      const rawText = await extractTextFromPdfUrlWithPdfJs(book.pdfPath);
+      const pages = rawText.split("\f");
+      pages.forEach((pageText, idx) => {
+        const normalizedPage = normalizeArabicText(pageText);
         let match;
-        while ((match = regex.exec(pageText)) !== null) {
+        while ((match = regex.exec(normalizedPage)) !== null) {
           results.push({
             bookId: book.id,
             bookTitle: book.title,
+            page: idx + 1,
             snippet: match[0],
-            page: pageNumber,
           });
         }
       });
     }
 
-    res.json({ results });
+    return res.json({ results });
   } catch (error) {
     console.error("Error in searchGlobalMulti:", error);
-    res.status(500).json({ error: "Search failed" });
+    return res.status(500).json({ error: "Search failed" });
   }
 };
