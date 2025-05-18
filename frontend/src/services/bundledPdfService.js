@@ -1,6 +1,7 @@
 // /frontend/src/services/bundledPdfService.js
 import RNFS from "react-native-fs";
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // In Android, the assets path should NOT include any leading slash
 const BUNDLED_PDF_PATH =
@@ -9,11 +10,70 @@ const BUNDLED_PDF_PATH =
 // Map of book IDs to their bundled PDF filenames
 const bundledPdfs = {};
 
+// Hardcoded map of known bundled PDFs - this serves as a fallback
+// when file system operations fail
+const KNOWN_BUNDLED_PDFS = {
+  "174534127-92879.pdf": "pdfs/174534127-92879.pdf",
+  "174534175-95989.pdf": "pdfs/174534175-95989.pdf",
+  "174568508-65869.pdf": "pdfs/174568508-65869.pdf",
+  "arabic_text_test.pdf": "pdfs/arabic_text_test.pdf",
+  // Add more bundled PDFs here as you add them to the app
+};
+
+// Cache key for storing bundled PDF info
+const BUNDLED_PDFS_CACHE_KEY = "bundled_pdfs_info";
+
+// Save the bundled PDFs info to AsyncStorage
+const saveBundledPdfsInfo = async () => {
+  try {
+    await AsyncStorage.setItem(
+      BUNDLED_PDFS_CACHE_KEY,
+      JSON.stringify(bundledPdfs)
+    );
+    console.log("Saved bundled PDFs info to AsyncStorage");
+  } catch (error) {
+    console.error("Error saving bundled PDFs info:", error);
+  }
+};
+
+// Load the bundled PDFs info from AsyncStorage
+const loadBundledPdfsInfo = async () => {
+  try {
+    const info = await AsyncStorage.getItem(BUNDLED_PDFS_CACHE_KEY);
+    if (info) {
+      const parsed = JSON.parse(info);
+      Object.assign(bundledPdfs, parsed);
+      console.log(
+        `Loaded ${Object.keys(bundledPdfs).length} bundled PDFs from cache`
+      );
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Error loading bundled PDFs info:", error);
+    return false;
+  }
+};
+
 // Initialize the list of bundled PDFs
 export const initializeBundledPdfs = async () => {
   try {
     console.log("Starting bundled PDF initialization...");
 
+    // First, try to load from cache
+    const loaded = await loadBundledPdfsInfo();
+    if (loaded && Object.keys(bundledPdfs).length > 0) {
+      console.log("Using cached bundled PDFs info");
+      return Object.keys(bundledPdfs).length;
+    }
+
+    // Merge in known bundled PDFs as a starting point
+    Object.assign(bundledPdfs, KNOWN_BUNDLED_PDFS);
+    console.log(
+      `Added ${Object.keys(KNOWN_BUNDLED_PDFS).length} known bundled PDFs`
+    );
+
+    // Try to discover more PDFs from the filesystem
     if (Platform.OS === "android") {
       try {
         console.log("Reading Android assets directory:", BUNDLED_PDF_PATH);
@@ -38,7 +98,7 @@ export const initializeBundledPdfs = async () => {
         // Try with a different path format as fallback
         try {
           console.log("Trying fallback path for Android assets");
-          const fallbackPath = "/pdfs";
+          const fallbackPath = "pdfs"; // No leading slash
           const files = await RNFS.readDirAssets(fallbackPath);
           console.log("Found files in fallback path:", JSON.stringify(files));
 
@@ -56,7 +116,29 @@ export const initializeBundledPdfs = async () => {
       }
     } else if (Platform.OS === "ios") {
       // iOS implementation remains the same
+      try {
+        console.log("Reading iOS bundle directory:", BUNDLED_PDF_PATH);
+        const files = await RNFS.readDir(BUNDLED_PDF_PATH);
+        console.log("Found files in bundle:", JSON.stringify(files));
+
+        files.forEach((file) => {
+          if (file.name.endsWith(".pdf")) {
+            const fileKey = file.name.replace(".pdf", "");
+            bundledPdfs[fileKey] = file.path;
+            bundledPdfs[file.name] = file.path;
+            console.log(`Added bundled PDF: ${file.name}`);
+          }
+        });
+      } catch (error) {
+        console.log(
+          "Error reading bundled PDFs from iOS bundle:",
+          error.message
+        );
+      }
     }
+
+    // Save the bundled PDFs info to cache
+    await saveBundledPdfsInfo();
 
     console.log(
       `Initialized ${Object.keys(bundledPdfs).length} bundled PDFs:`,

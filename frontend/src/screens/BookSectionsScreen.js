@@ -49,7 +49,7 @@ const BookSectionsScreen = ({ navigation }) => {
 
     try {
       const response = await fetch(
-        "http://ramaytilibrary-production.up.railway.app/api/books"
+        "https://ramaytilibrary-production.up.railway.app/api/books"
       );
       const data = await response.json();
 
@@ -62,8 +62,9 @@ const BookSectionsScreen = ({ navigation }) => {
 
         return {
           ...book,
-          sections: [],
-          sectionsLoaded: false,
+          sections: book.sections || [],
+          sectionsLoaded:
+            book.sections && book.sections.length > 0 ? true : false,
         };
       });
 
@@ -98,7 +99,7 @@ const BookSectionsScreen = ({ navigation }) => {
       setBooks(updatedBooks);
 
       const response = await fetch(
-        `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}/sections`
+        `https://ramaytilibrary-production.up.railway.app/api/books/${bookId}/sections`
       );
       const sectionsData = await response.json();
 
@@ -177,6 +178,25 @@ const BookSectionsScreen = ({ navigation }) => {
     }
   };
 
+  const handleSectionPress = (book, section, index) => {
+    navigation.navigate("CustomPdfReader", {
+      bookId: book.id,
+      bookTitle: book.title,
+      sectionId: section.id,
+      sectionName: section.name,
+      page: 1,
+      pdfPath: section.pdfPath,
+      pdfFilename: section.fileName || getFilenameFromPath(section.pdfPath),
+    });
+  };
+
+  // Helper to extract filename from path
+  const getFilenameFromPath = (path) => {
+    if (!path) return null;
+    const parts = path.split("/");
+    return parts[parts.length - 1];
+  };
+
   const renderBookItem = ({ item, index }) => {
     const isExpanded = expandedBookId === item.id;
     const hasRotationValue = rotationValues[item.id] !== undefined;
@@ -248,21 +268,20 @@ const BookSectionsScreen = ({ navigation }) => {
                 <Text style={styles.loadingText}>{t("loadingSections")}</Text>
               </View>
             ) : item.sectionsLoaded && item.sections.length > 0 ? (
-              item.sections.map((section, index) => (
+              item.sections.map((section, sectionIndex) => (
                 <TouchableOpacity
-                  key={index}
+                  key={section.id || `${item.id}_section_${sectionIndex}`}
                   style={styles.sectionItem}
                   activeOpacity={0.7}
                   onPress={() =>
-                    navigation.navigate("DummyPdfScreen", {
-                      bookId: item.id,
-                      sectionIndex: index,
-                    })
+                    handleSectionPress(item, section, sectionIndex)
                   }
                 >
                   <View style={styles.sectionInfo}>
                     <Text style={styles.sectionNumber}>
-                      {isRTL ? formatNumber(index + 1) : index + 1}
+                      {isRTL
+                        ? formatNumber(sectionIndex + 1)
+                        : sectionIndex + 1}
                     </Text>
                     <Text style={styles.sectionName}>{section.name}</Text>
                   </View>
