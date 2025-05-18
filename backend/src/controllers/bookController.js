@@ -274,6 +274,10 @@ exports.getBookContent = async (req, res) => {
       pdfPath = bookData.pdfpath;
     } else if (bookData.pdf_path) {
       pdfPath = bookData.pdf_path;
+    } else if (bookData.sections && bookData.sections.length > 0) {
+      // NEW CODE: Check if the book has sections and use the first section's PDF path
+      pdfPath = bookData.sections[0].pdfPath;
+      console.log(`Using PDF path from first section: ${pdfPath}`);
     } else {
       // Look through all fields to find anything that might contain a PDF URL
       for (const key in bookData) {
@@ -296,12 +300,20 @@ exports.getBookContent = async (req, res) => {
       });
     }
 
-    // Format the PDF path
+    // Format the PDF path - UPDATED FOR HTTPS
     if (pdfPath.includes("localhost")) {
       pdfPath = pdfPath.replace(
         "localhost",
         "ramaytilibrary-production.up.railway.app"
       );
+    }
+
+    // Force HTTPS for all Railway URLs
+    if (
+      pdfPath.includes("ramaytilibrary-production.up.railway.app") &&
+      pdfPath.startsWith("http://")
+    ) {
+      pdfPath = pdfPath.replace("http://", "https://");
     }
 
     // Clean and properly encode the URL (handles Arabic filenames)
@@ -312,6 +324,14 @@ exports.getBookContent = async (req, res) => {
 
     // Extract text content from the PDF
     try {
+      // If the path is relative (starts with /files/), make it absolute
+      if (pdfPath.startsWith("/files/")) {
+        const serverUrl =
+          process.env.SERVER_URL ||
+          "https://ramaytilibrary-production.up.railway.app";
+        pdfPath = `${serverUrl}${pdfPath}`;
+      }
+
       const textContent = await extractTextFromPdfUrlWithPdfJs(pdfPath);
       console.log(`Text extraction complete, processing pages...`);
 

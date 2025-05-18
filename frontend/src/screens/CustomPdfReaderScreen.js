@@ -374,7 +374,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
           try {
             console.log("Fetching book details...");
             const response = await fetch(
-              `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}`
+              `https://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}`
             );
             if (response.ok) {
               bookData = await response.json();
@@ -402,7 +402,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
             try {
               console.log("Extracting content from server...");
               const contentResponse = await fetch(
-                `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`
+                `https://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`
               );
               if (contentResponse.ok) {
                 const data = await contentResponse.json();
