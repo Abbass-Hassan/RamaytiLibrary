@@ -1,36 +1,34 @@
-// backend/src/textUtils.js
-
 /**
  * Normalize Arabic text by:
- * - Converting to NFKC,
- * - Replacing different forms of Alef, Yeh, etc.,
- * - Removing diacritics & Tatweel.
+ * - Unicode NFKC normalization,
+ * - Replacing Alef, Yeh, Ta Marbuta, Waw variants,
+ * - Removing ALL diacritics (الحركات) and ALL hamza (الهمزة) chars.
  */
 function normalizeArabicText(text) {
   if (!text) return "";
 
-  // First apply Unicode normalization
+  // Unicode normalization (NFKC)
   let normalized = text.normalize("NFKC");
 
-  // Replace ALL Alef forms and related characters to plain Alef (ا)
-  normalized = normalized.replace(/[أإآءؤئٱٲٳٵ]/g, "ا");
+  // Replace all Alef variants with plain Alef
+  normalized = normalized.replace(/[أإآٱٲٳٵ]/g, "ا");
 
-  // Replace Yeh forms to plain Yeh (ي)
+  // Replace Yeh variants with plain Yeh
   normalized = normalized.replace(/[ىيئٸۑۍێېۑ]/g, "ي");
 
   // Replace Ta Marbuta with Heh
   normalized = normalized.replace(/[ة]/g, "ه");
 
-  // Replace Waw variants with plain Waw (و)
+  // Replace Waw variants with plain Waw
   normalized = normalized.replace(/[ؤۄۅۆۇۈۉۊ]/g, "و");
 
-  // Remove diacritics (all vowel marks)
-  normalized = normalized.replace(/[\u064B-\u065F\u0670]/g, "");
+  // Remove ALL hamza chars (standalone or combined)
+  normalized = normalized.replace(/[\u0621\u0624\u0626\u0674]/g, ""); // ء، ؤ، ئ، ٴ
 
-  // Remove standalone hamza if not already covered
-  normalized = normalized.replace(/[\u0621]/g, "");
+  // Remove ALL Arabic diacritics (vowel marks, shadda, sukun, etc.)
+  normalized = normalized.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, ""); // Basic+Extended
 
-  // Remove Tatweel (elongation character)
+  // Remove Tatweel (elongation char)
   normalized = normalized.replace(/[\u0640]/g, "");
 
   return normalized;
