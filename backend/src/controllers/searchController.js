@@ -11,12 +11,12 @@ function escapeRegExp(str) {
 }
 
 exports.searchPdf = async (req, res) => {
-  const { bookId, q } = req.query;
-  if (!bookId || !q) {
-    return res.status(400).json({ error: "Missing bookId or search query" });
-  }
-
   try {
+    const { bookId, q } = req.query;
+    if (!bookId || !q) {
+      return res.status(400).json({ error: "Missing bookId or search query" });
+    }
+
     const docRef = db.collection("books").doc(bookId);
     const docSnap = await docRef.get();
     if (!docSnap.exists) {
@@ -25,19 +25,20 @@ exports.searchPdf = async (req, res) => {
 
     const bookData = docSnap.data();
     const rawText = await extractTextFromPdfUrlWithPdfJs(bookData.pdfPath);
-    const pages = rawText.split("\f");
+    // normalize entire document before splitting
+    const normalizedDoc = normalizeArabicText(rawText);
+    const pages = normalizedDoc.split("\f");
 
-    const normalizedQuery = normalizeArabicText(q);
+    const qNorm = normalizeArabicText(q);
     const regex = new RegExp(
-      `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
-      "giu"
+      `(.{0,30})(${escapeRegExp(qNorm)})(.{0,30})`,
+      "gi"
     );
 
     const matches = [];
     pages.forEach((pageText, idx) => {
-      const normalizedPage = normalizeArabicText(pageText);
       let match;
-      while ((match = regex.exec(normalizedPage)) !== null) {
+      while ((match = regex.exec(pageText)) !== null) {
         matches.push({
           page: idx + 1,
           snippet: match[0],
@@ -45,20 +46,20 @@ exports.searchPdf = async (req, res) => {
       }
     });
 
-    return res.json({ results: matches });
+    res.json({ results: matches });
   } catch (error) {
     console.error("Error in searchPdf:", error);
-    return res.status(500).json({ error: "Search failed" });
+    res.status(500).json({ error: "Search failed" });
   }
 };
 
 exports.searchGlobalMulti = async (req, res) => {
-  const { q, bookIds } = req.query;
-  if (!q) {
-    return res.status(400).json({ error: "Missing search query" });
-  }
-
   try {
+    const { q, bookIds } = req.query;
+    if (!q) {
+      return res.status(400).json({ error: "Missing search query" });
+    }
+
     let books = [];
     if (bookIds) {
       const ids = bookIds.split(",").map((id) => id.trim());
@@ -73,20 +74,21 @@ exports.searchGlobalMulti = async (req, res) => {
       books = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     }
 
-    const normalizedQuery = normalizeArabicText(q);
+    const results = [];
+    const qNorm = normalizeArabicText(q);
     const regex = new RegExp(
-      `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
-      "giu"
+      `(.{0,30})(${escapeRegExp(qNorm)})(.{0,30})`,
+      "gi"
     );
 
-    const results = [];
     for (const book of books) {
       const rawText = await extractTextFromPdfUrlWithPdfJs(book.pdfPath);
-      const pages = rawText.split("\f");
+      const normalizedDoc = normalizeArabicText(rawText);
+      const pages = normalizedDoc.split("\f");
+
       pages.forEach((pageText, idx) => {
-        const normalizedPage = normalizeArabicText(pageText);
         let match;
-        while ((match = regex.exec(normalizedPage)) !== null) {
+        while ((match = regex.exec(pageText)) !== null) {
           results.push({
             bookId: book.id,
             bookTitle: book.title,
@@ -97,9 +99,9 @@ exports.searchGlobalMulti = async (req, res) => {
       });
     }
 
-    return res.json({ results });
+    res.json({ results });
   } catch (error) {
     console.error("Error in searchGlobalMulti:", error);
-    return res.status(500).json({ error: "Search failed" });
+    res.status(500).json({ error: "Search failed" });
   }
 };
