@@ -365,19 +365,6 @@ export default function Dashboard() {
                     <div key={book.id} className="book-item">
                       <div className="book-info">
                         <h3>{book.title}</h3>
-                        {book.imagePath && (
-                          <img
-                            src={`${API_URL}${book.imagePath}`}
-                            alt={book.title}
-                            className="book-cover-thumbnail"
-                            onError={(e) => {
-                              console.error("Image load error:", e);
-                              e.target.src =
-                                "https://via.placeholder.com/80x120?text=No+Image";
-                              e.target.alt = "Image not found";
-                            }}
-                          />
-                        )}
                         <p>
                           Sections: {book.sections ? book.sections.length : 0}
                         </p>
@@ -427,15 +414,7 @@ export default function Dashboard() {
                     onChange={handleImageChange}
                     required
                   />
-                  {bookImage && (
-                    <div className="image-preview">
-                      <img
-                        src={URL.createObjectURL(bookImage)}
-                        alt="Book cover preview"
-                        className="cover-preview"
-                      />
-                    </div>
-                  )}
+                  {/* Image preview removed as requested */}
                 </div>
 
                 <button type="submit" className="submit-btn" disabled={loading}>
@@ -455,19 +434,7 @@ export default function Dashboard() {
                   &larr; Back to books
                 </button>
                 <h2>{selectedBook.title}</h2>
-                {selectedBook.imagePath && (
-                  <img
-                    src={`${API_URL}${selectedBook.imagePath}`}
-                    alt={selectedBook.title}
-                    className="book-cover-large"
-                    onError={(e) => {
-                      console.error("Image load error:", e);
-                      e.target.src =
-                        "https://via.placeholder.com/150x225?text=No+Image";
-                      e.target.alt = "Image not found";
-                    }}
-                  />
-                )}
+                {/* Book cover image removed as requested */}
               </div>
 
               <div className="book-details">

@@ -321,16 +321,10 @@ const BooksListScreen = ({ navigation }) => {
             {item.title}
           </Text>
         </View>
-        {item.sections && item.sections.length > 0 && (
-          <View style={styles.sectionsIndicator}>
-            <Text style={styles.sectionsCount}>
-              {toArabicNumeral(item.sections.length)} {t("volumes")}
-            </Text>
-          </View>
-        )}
+        {/* Volume count indicator removed as requested */}
         {isOffline && (
-          <View style={styles.mockBadge}>
-            <Text style={styles.mockBadgeText}>{t("offline")}</Text>
+          <View style={styles.offlineBadge}>
+            <Text style={styles.offlineBadgeText}>{t("offline")}</Text>
           </View>
         )}
       </View>
@@ -459,21 +453,8 @@ const styles = StyleSheet.create({
     color: "white",
     textAlign: "center",
   },
-  sectionsIndicator: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  sectionsCount: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  mockBadge: {
+  // Styles for section indicator removed
+  offlineBadge: {
     position: "absolute",
     top: 10,
     left: 10,
@@ -482,7 +463,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
   },
-  mockBadgeText: {
+  offlineBadgeText: {
     color: "white",
     fontSize: 10,
     fontWeight: "bold",

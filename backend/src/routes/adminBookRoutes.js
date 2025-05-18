@@ -57,7 +57,7 @@ const storage = multer.diskStorage({
 // Create upload middleware with file filtering
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB file size limit
+  limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: function (req, file, cb) {
     console.log("Filtering file:", file.fieldname, file.mimetype);
     if (file.fieldname === "pdf") {

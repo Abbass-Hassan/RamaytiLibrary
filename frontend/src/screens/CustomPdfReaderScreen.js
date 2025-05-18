@@ -150,6 +150,8 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
   const [selectedText, setSelectedText] = useState("");
   const [showSelectionToolbar, setShowSelectionToolbar] = useState(false);
   const [selectionActive, setSelectionActive] = useState(false);
+  // New state to control which search navigation to show
+  const [showGlobalSearchNav, setShowGlobalSearchNav] = useState(false);
   const scrollViewRef = useRef(null);
   const textRef = useRef(null);
   const [fontSize, setFontSize] = useState(16);
@@ -161,6 +163,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
   const [touchEndX, setTouchEndX] = useState(0);
   const [touchEndY, setTouchEndY] = useState(0);
   const [isVerticalScrolling, setIsVerticalScrolling] = useState(false);
+  const [showSwipeHint, setShowSwipeHint] = useState(true);
 
   useEffect(() => {
     if (
@@ -188,6 +191,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
         setActiveOccurrenceIndex(0);
         setShowSelectionToolbar(false);
         setSelectionActive(false);
+        setShowGlobalSearchNav(false);
       }
     });
 
@@ -199,7 +203,15 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
       setIsOffline(!state.isConnected);
     });
 
-    return () => unsubscribe();
+    // Hide swipe hint after 5 seconds
+    const hintTimeout = setTimeout(() => {
+      setShowSwipeHint(false);
+    }, 5000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(hintTimeout);
+    };
   }, []);
 
   useEffect(() => {
@@ -420,37 +432,38 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
                 return;
               }
             } catch (error) {
-              console.log(
-                "Failed to extract content, using mock content:",
-                error.message
-              );
-              // If server extraction fails but we have the PDF, use mock content
-              const mockContent = [
-                `Content for book ${
-                  bookTitle || effectiveBookId
-                } is available offline.\n\nThe PDF has been bundled with the app, but text extraction is not available without internet.`,
-                `Please turn on internet connection to extract text content, or use the standard PDF viewer.`,
+              console.log("Failed to extract content:", error.message);
+              // Show a simple offline message instead of mock content
+              const offlineMessage = [
+                `${
+                  t("offlineContent") || "Content not available offline."
+                }\n\n${
+                  t("connectInternet") ||
+                  "Please connect to the internet to view this book."
+                }`,
               ];
 
-              await saveBookContent(effectiveBookId, mockContent);
-              setBookContent(mockContent);
-              setNumberOfPages(mockContent.length);
+              await saveBookContent(effectiveBookId, offlineMessage);
+              setBookContent(offlineMessage);
+              setNumberOfPages(offlineMessage.length);
               setLoading(false);
               return;
             }
           } else {
-            // If offline but we have the PDF, use mock content
-            console.log("Device is offline but PDF exists, using mock content");
-            const mockContent = [
-              `Content for book ${
-                bookTitle || effectiveBookId
-              } is available offline.\n\nThe PDF has been bundled with the app, but text extraction is not available without internet.`,
-              `Please turn on internet connection to extract text content, or use the standard PDF viewer.`,
+            // If offline but we have the PDF, show offline message
+            console.log(
+              "Device is offline but PDF exists, showing offline message"
+            );
+            const offlineMessage = [
+              `${t("offlineContent") || "Content not available offline."}\n\n${
+                t("connectInternet") ||
+                "Please connect to the internet to view this book."
+              }`,
             ];
 
-            await saveBookContent(effectiveBookId, mockContent);
-            setBookContent(mockContent);
-            setNumberOfPages(mockContent.length);
+            await saveBookContent(effectiveBookId, offlineMessage);
+            setBookContent(offlineMessage);
+            setNumberOfPages(offlineMessage.length);
             setLoading(false);
             return;
           }
@@ -568,6 +581,13 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
     setSearchResults(results);
     setCurrentMatchIndex(0);
 
+    // Set global search navigation visibility based on results
+    // Only show global search if there are matches on multiple pages
+    const hasMatchesOnMultiplePages =
+      results.length > 0 && results.some((r) => r.page !== results[0].page);
+
+    setShowGlobalSearchNav(hasMatchesOnMultiplePages);
+
     if (results.length > 0) {
       jumpToMatch(0, results);
     } else if (!isFromGlobalSearch) {
@@ -636,7 +656,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error("Error toggling bookmark:", error);
-      Alert.alert(t("errorTitle"), t("searchFailed"));
+      Alert.alert(t("errorTitle"), t("bookmarkFailed"));
     }
   };
 
@@ -660,6 +680,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
     }
   };
 
+  // Improved touch handling for page navigation
   const handleTouchStart = (e) => {
     setTouchStartX(e.nativeEvent.pageX);
     setTouchStartY(e.nativeEvent.pageY);
@@ -668,36 +689,44 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
 
   const handleTouchMove = (e) => {
     const currentY = e.nativeEvent.pageY;
-    const verticalDistance = Math.abs(currentY - touchStartY);
+    const currentX = e.nativeEvent.pageX;
 
-    if (verticalDistance > 15) {
+    // Determine if user is primarily scrolling vertically
+    const verticalDistance = Math.abs(currentY - touchStartY);
+    const horizontalDistance = Math.abs(currentX - touchStartX);
+
+    // If vertical movement is greater than horizontal and exceeds threshold
+    if (verticalDistance > horizontalDistance && verticalDistance > 10) {
       setIsVerticalScrolling(true);
     }
   };
 
   const handleTouchEnd = (e) => {
+    if (isVerticalScrolling) {
+      // If user was primarily scrolling vertically, don't change pages
+      return;
+    }
+
     const currentX = e.nativeEvent.pageX;
-    setTouchEndX(currentX);
+    const swipeDistance = currentX - touchStartX;
 
-    if (!isVerticalScrolling) {
-      const swipeDistance = touchEndX - touchStartX;
-      const minSwipeDistance = 80;
+    // Lower threshold for easier swiping (40 pixels)
+    const minSwipeDistance = 40;
 
-      if (Math.abs(swipeDistance) > minSwipeDistance) {
-        if (isRTL || isArabicContent) {
-          if (swipeDistance < 0) {
-            goToPrevPage();
-          } else {
-            goToNextPage();
-          }
-        } else {
-          if (swipeDistance > 0) {
-            goToPrevPage();
-          } else {
-            goToNextPage();
-          }
-        }
+    if (Math.abs(swipeDistance) > minSwipeDistance) {
+      // Determine direction based on RTL setting and content language
+      const isRtlMode = isRTL || isArabicContent;
+
+      if (isRtlMode) {
+        // For RTL: swipe left goes to previous page, right goes to next
+        swipeDistance < 0 ? goToPrevPage() : goToNextPage();
+      } else {
+        // For LTR: swipe right goes to previous page, left goes to next
+        swipeDistance > 0 ? goToPrevPage() : goToNextPage();
       }
+
+      // Hide swipe hint after successful swipe
+      setShowSwipeHint(false);
     }
   };
 
@@ -793,7 +822,13 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
       <View style={styles.toolbar}>
         <TouchableOpacity
           style={styles.toolbarButton}
-          onPress={() => setIsSearchVisible(!isSearchVisible)}
+          onPress={() => {
+            setIsSearchVisible(!isSearchVisible);
+            if (!isSearchVisible) {
+              // When opening search, start with local search first
+              setShowGlobalSearchNav(false);
+            }
+          }}
         >
           <Ionicons
             name={isSearchVisible ? "close-circle-outline" : "search"}
@@ -877,39 +912,56 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
           >
             <Ionicons name="search" size={20} color="#FFF" />
           </TouchableOpacity>
+
+          {isSearchVisible && searchResults.length > 0 && (
+            <TouchableOpacity
+              style={styles.globalSearchToggle}
+              onPress={() => setShowGlobalSearchNav(!showGlobalSearchNav)}
+            >
+              <Ionicons
+                name={showGlobalSearchNav ? "document-text" : "albums"}
+                size={20}
+                color="#FFF"
+              />
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
-      {occurrencesOnPage.length > 0 && (
-        <View style={styles.searchResultsNav}>
-          <Text style={styles.matchCount}>
-            {toArabicDigits(activeOccurrenceIndex + 1)}/
-            {toArabicDigits(occurrencesOnPage.length)} {t("on")} {t("page")}
-          </Text>
-          <TouchableOpacity
-            onPress={prevOccurrenceOnPage}
-            disabled={occurrencesOnPage.length <= 1}
-            style={[
-              styles.arrowButton,
-              occurrencesOnPage.length <= 1 && styles.arrowDisabled,
-            ]}
-          >
-            <Ionicons name="chevron-up" size={18} color="#FFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={nextOccurrenceOnPage}
-            disabled={occurrencesOnPage.length <= 1}
-            style={[
-              styles.arrowButton,
-              occurrencesOnPage.length <= 1 && styles.arrowDisabled,
-            ]}
-          >
-            <Ionicons name="chevron-down" size={18} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Show either page occurrences OR global search based on state */}
+      {occurrencesOnPage.length > 0 &&
+        isSearchVisible &&
+        !showGlobalSearchNav && (
+          <View style={styles.searchResultsNav}>
+            <Text style={styles.matchCount}>
+              {toArabicDigits(activeOccurrenceIndex + 1)}/
+              {toArabicDigits(occurrencesOnPage.length)} {t("on")} {t("page")}{" "}
+              {toArabicDigits(currentPage)}
+            </Text>
+            <TouchableOpacity
+              onPress={prevOccurrenceOnPage}
+              disabled={occurrencesOnPage.length <= 1}
+              style={[
+                styles.arrowButton,
+                occurrencesOnPage.length <= 1 && styles.arrowDisabled,
+              ]}
+            >
+              <Ionicons name="chevron-up" size={18} color="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={nextOccurrenceOnPage}
+              disabled={occurrencesOnPage.length <= 1}
+              style={[
+                styles.arrowButton,
+                occurrencesOnPage.length <= 1 && styles.arrowDisabled,
+              ]}
+            >
+              <Ionicons name="chevron-down" size={18} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+        )}
 
-      {searchResults.length > 1 && isSearchVisible && (
+      {searchResults.length > 1 && isSearchVisible && showGlobalSearchNav && (
         <View style={styles.globalSearchNav}>
           <Text style={styles.globalMatchCount}>
             {toArabicDigits(currentMatchIndex + 1)}/
@@ -980,13 +1032,15 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
         )}
       </ScrollView>
 
-      <View style={styles.swipeHintContainer}>
-        <Text style={styles.swipeHintText}>
-          {isArabicContent || isRTL
-            ? "← اسحب لليمين أو لليسار للتنقل بين الصفحات →"
-            : "← Swipe left or right to navigate pages →"}
-        </Text>
-      </View>
+      {showSwipeHint && (
+        <View style={styles.swipeHintContainer}>
+          <Text style={styles.swipeHintText}>
+            {isArabicContent || isRTL
+              ? "← اسحب لليمين أو لليسار للتنقل بين الصفحات →"
+              : "← Swipe left or right to navigate pages →"}
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -1100,6 +1154,12 @@ const styles = StyleSheet.create({
   searchButton: {
     marginLeft: 8,
     backgroundColor: colors.primary,
+    borderRadius: 6,
+    padding: 6,
+  },
+  globalSearchToggle: {
+    marginLeft: 8,
+    backgroundColor: "#666",
     borderRadius: 6,
     padding: 6,
   },
