@@ -7,9 +7,9 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   LogBox,
+  Platform,
 } from "react-native";
 import colors from "../config/colors";
 import { useRoute } from "@react-navigation/native";
@@ -25,54 +25,8 @@ LogBox.ignoreLogs(["Fetch error", "Network request failed", "Server error"]);
 const BASE_URL = "https://ramaytilibrary-production.up.railway.app";
 const API_ENDPOINT = `${BASE_URL}/api/books`;
 
-// Mock data to use when server is unavailable
-const MOCK_BOOKS = [
-  {
-    id: "book1",
-    title: "كتاب ١",
-    sections: [
-      {
-        id: "book1_section1",
-        name: "المجلد الأول",
-        pdfPath: "/files/174534127-92879.pdf",
-        fileName: "174534127-92879.pdf",
-      },
-      {
-        id: "book1_section2",
-        name: "المجلد الثاني",
-        pdfPath: "/files/174534175-95989.pdf",
-        fileName: "174534175-95989.pdf",
-      },
-    ],
-    imagePath: null,
-  },
-  {
-    id: "book2",
-    title: "كتاب ٢",
-    sections: [
-      {
-        id: "book2_section1",
-        name: "المجلد الأول",
-        pdfPath: "/files/174568508-65869.pdf",
-        fileName: "174568508-65869.pdf",
-      },
-    ],
-    imagePath: null,
-  },
-  {
-    id: "book3",
-    title: "كتاب ٣",
-    sections: [
-      {
-        id: "book3_section1",
-        name: "المجلد الأول",
-        pdfPath: "/files/arabic_text_test.pdf",
-        fileName: "arabic_text_test.pdf",
-      },
-    ],
-    imagePath: null,
-  },
-];
+// Preload the default image
+const DEFAULT_BOOK_COVER = require("../assets/book-cover.png");
 
 // Helper function to convert numbers to Arabic numerals
 const toArabicNumeral = (num) => {
@@ -179,7 +133,7 @@ const BooksListScreen = ({ navigation }) => {
       // Try to get cached books
       const cachedBooks = await getCachedBooks();
 
-      // If we're offline, use cached books or mock data
+      // If we're offline, use cached books
       if (!isConnected) {
         setLoading(false);
 
@@ -188,20 +142,14 @@ const BooksListScreen = ({ navigation }) => {
           setBooks(cachedBooks);
           setUsingMockData(false);
         } else {
-          console.log("No cached books available, using mock data");
-          const processedMockBooks = processMockBooks(MOCK_BOOKS);
-          setBooks(processedMockBooks);
-          setUsingMockData(true);
-          saveBooks(processedMockBooks); // Save mock books to cache
+          setError("No cached books available and you're offline");
         }
         return;
       }
 
-      // Let's try to fetch data from the API endpoint with additional logging
+      // Let's try to fetch data from the API endpoint
       try {
-        console.log("Attempting to fetch books from HTTPS API:", API_ENDPOINT);
-
-        // Try main API endpoint with HTTPS
+        console.log("Fetching books from API:", API_ENDPOINT);
         const response = await fetch(API_ENDPOINT, {
           method: "GET",
           headers: {
@@ -212,53 +160,16 @@ const BooksListScreen = ({ navigation }) => {
         });
 
         console.log("API response status:", response.status);
-        console.log("API response headers:", JSON.stringify(response.headers));
 
         if (!response.ok) {
-          // Try the admin endpoint as fallback
-          console.log("Main API endpoint failed, trying admin endpoint");
-          const adminEndpoint = `${BASE_URL}/api/admin/books`;
-          console.log("Trying admin endpoint:", adminEndpoint);
-
-          const adminResponse = await fetch(adminEndpoint, {
-            method: "GET",
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-            },
-            timeout: 10000,
-          });
-
-          console.log("Admin API response status:", adminResponse.status);
-
-          if (!adminResponse.ok) {
-            throw new Error(
-              `All API endpoints failed. Main: ${response.status}, Admin: ${adminResponse.status}`
-            );
-          }
-
-          const adminData = await adminResponse.json();
-          console.log("Admin data received:", adminData ? "Yes" : "No");
-
-          if (adminData && adminData.success && adminData.data) {
-            console.log(
-              `Found ${adminData.data.length} books in admin response`
-            );
-
-            // Process the admin data
-            const processedBooks = adminData.data.map(processBook);
-            setBooks(processedBooks);
-            saveBooks(processedBooks);
-            setUsingMockData(false);
-            return;
-          } else {
-            throw new Error("Admin endpoint returned invalid data format");
-          }
+          throw new Error(`API error: ${response.status}`);
         }
 
-        // Process response from main endpoint
         const data = await response.json();
-        console.log("Main API response:", data ? "Data received" : "No data");
+        console.log(
+          "Books data fetched successfully:",
+          Array.isArray(data) ? data.length : "Not an array"
+        );
 
         // Process the data
         const processedBooks = Array.isArray(data)
@@ -274,43 +185,30 @@ const BooksListScreen = ({ navigation }) => {
           saveBooks(processedBooks);
           setUsingMockData(false);
         } else {
-          // No books returned, use mock data
-          const processedMockBooks = processMockBooks(MOCK_BOOKS);
-          setBooks(processedMockBooks);
-          setUsingMockData(true);
-          saveBooks(processedMockBooks);
-          setError("No books found on server. Using sample books.");
+          setError("No books found on server.");
         }
       } catch (apiError) {
-        console.error("API fetch error details:", apiError.message);
+        console.error("API fetch error:", apiError.message);
 
-        // Handle the error by using cached or mock data
+        // Handle the error by using cached books if available
         if (cachedBooks && cachedBooks.length > 0) {
           setBooks(cachedBooks);
           setUsingMockData(false);
         } else {
-          const processedMockBooks = processMockBooks(MOCK_BOOKS);
-          setBooks(processedMockBooks);
-          setUsingMockData(true);
-          saveBooks(processedMockBooks);
+          setError(
+            `Server error: ${apiError.message}. No cached books available.`
+          );
         }
-
-        setError(`Server error: ${apiError.message}. Using local books.`);
       }
     } catch (error) {
       console.error("General error in fetchBooks:", error.message);
       setError(error.message);
 
-      // Try to use cached books or mock data as fallback
+      // Try to use cached books as fallback
       const cachedBooks = await getCachedBooks();
       if (cachedBooks && cachedBooks.length > 0) {
         setBooks(cachedBooks);
         setUsingMockData(false);
-      } else {
-        const processedMockBooks = processMockBooks(MOCK_BOOKS);
-        setBooks(processedMockBooks);
-        setUsingMockData(true);
-        saveBooks(processedMockBooks);
       }
     } finally {
       setLoading(false);
@@ -331,24 +229,6 @@ const BooksListScreen = ({ navigation }) => {
           : `${BASE_URL}${book.imagePath}`
         : null,
     };
-  };
-
-  // Process mock books to add full URLs and other properties
-  const processMockBooks = (mockBooks) => {
-    return mockBooks.map((book) => ({
-      ...book,
-      id: book.id || String(Date.now() + Math.random()),
-      // Make sure sections is always an array
-      sections: book.sections || [],
-      // Add coverImageUrl
-      coverImageUrl: book.imagePath
-        ? book.imagePath.startsWith("http")
-          ? book.imagePath
-          : `${BASE_URL}${book.imagePath}`
-        : null,
-      // Add properties to identify that this is mock data
-      isMockData: true,
-    }));
   };
 
   const onRefresh = () => {
@@ -393,15 +273,25 @@ const BooksListScreen = ({ navigation }) => {
     <TouchableOpacity onPress={() => handleBookPress(item)} style={styles.card}>
       <View style={styles.coverContainer}>
         {item.coverImageUrl ? (
-          <Image
-            source={{ uri: item.coverImageUrl }}
-            style={styles.coverImage}
-            resizeMode="cover"
-            defaultSource={require("../assets/book-cover.png")}
-          />
+          // FIX: Remove defaultSource on Android to prevent the error
+          Platform.OS === "ios" ? (
+            <Image
+              source={{ uri: item.coverImageUrl }}
+              style={styles.coverImage}
+              resizeMode="cover"
+              defaultSource={DEFAULT_BOOK_COVER}
+            />
+          ) : (
+            <Image
+              source={{ uri: item.coverImageUrl }}
+              style={styles.coverImage}
+              resizeMode="cover"
+              // No defaultSource on Android
+            />
+          )
         ) : (
           <Image
-            source={require("../assets/book-cover.png")}
+            source={DEFAULT_BOOK_COVER}
             style={styles.coverImage}
             resizeMode="cover"
           />
@@ -418,7 +308,7 @@ const BooksListScreen = ({ navigation }) => {
             </Text>
           </View>
         )}
-        {(item.isMockData || isOffline) && (
+        {usingMockData && (
           <View style={styles.mockBadge}>
             <Text style={styles.mockBadgeText}>{t("offline")}</Text>
           </View>

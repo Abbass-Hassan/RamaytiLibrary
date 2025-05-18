@@ -10,6 +10,7 @@ import {
   Alert,
   ScrollView,
   SafeAreaView,
+  Platform,
 } from "react-native";
 import colors from "../config/colors";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -30,7 +31,10 @@ const toArabicNumeral = (num) => {
     .join("");
 };
 
-const SERVER_URL = "http://ramaytilibrary-production.up.railway.app";
+// Preload default book cover
+const DEFAULT_BOOK_COVER = require("../assets/book-cover.png");
+
+const SERVER_URL = "https://ramaytilibrary-production.up.railway.app";
 
 const BookVolumesScreen = ({ route, navigation }) => {
   const { t, i18n } = useTranslation();
@@ -172,17 +176,26 @@ const BookVolumesScreen = ({ route, navigation }) => {
       style={styles.volumeCard}
     >
       <View style={styles.coverContainer}>
-        {/* Use book cover image for all volumes */}
+        {/* Use book cover image for all volumes - Fixed for Android */}
         {item.coverImageUrl ? (
-          <Image
-            source={{ uri: item.coverImageUrl }}
-            style={styles.coverImage}
-            resizeMode="cover"
-            defaultSource={require("../assets/book-cover.png")}
-          />
+          Platform.OS === "ios" ? (
+            <Image
+              source={{ uri: item.coverImageUrl }}
+              style={styles.coverImage}
+              resizeMode="cover"
+              defaultSource={DEFAULT_BOOK_COVER}
+            />
+          ) : (
+            <Image
+              source={{ uri: item.coverImageUrl }}
+              style={styles.coverImage}
+              resizeMode="cover"
+              // Removed defaultSource on Android
+            />
+          )
         ) : (
           <Image
-            source={require("../assets/book-cover.png")}
+            source={DEFAULT_BOOK_COVER}
             style={styles.coverImage}
             resizeMode="cover"
           />

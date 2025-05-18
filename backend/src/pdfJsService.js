@@ -368,6 +368,15 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
 
     let data;
 
+    // Fix 1: Convert HTTP to HTTPS for Railway.app URLs
+    if (
+      pdfUrl.includes("ramaytilibrary-production.up.railway.app") &&
+      pdfUrl.startsWith("http://")
+    ) {
+      pdfUrl = pdfUrl.replace("http://", "https://");
+      console.log("Converted HTTP to HTTPS:", pdfUrl);
+    }
+
     // Handle file:// protocol for direct file access
     if (pdfUrl.startsWith("file://")) {
       const filePath = pdfUrl.replace("file://", "");
@@ -383,18 +392,19 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
     } else {
       // Ensure the URL is absolute and properly formatted
       if (pdfUrl.startsWith("/files/")) {
+        // Fix 2: Use HTTPS for Railway.app server URL
         const serverUrl =
           process.env.SERVER_URL ||
-          "http://ramaytilibrary-production.up.railway.app";
+          "https://ramaytilibrary-production.up.railway.app";
         pdfUrl = `${serverUrl}${pdfUrl}`;
         console.log("Using absolute URL for local file in extraction:", pdfUrl);
       }
 
-      // Replace any localhost references with the actual server URL
+      // Fix 3: Replace any localhost references with the HTTPS server URL
       if (pdfUrl.includes("localhost") || pdfUrl.includes("::1")) {
         pdfUrl = pdfUrl.replace(
           /https?:\/\/(localhost|::1)(:\d+)?/,
-          "http://ramaytilibrary-production.up.railway.app"
+          "https://ramaytilibrary-production.up.railway.app"
         );
         console.log("Replaced localhost with production URL:", pdfUrl);
       }
@@ -402,9 +412,16 @@ async function extractTextFromPdfUrlWithPdfJs(pdfUrl, options = {}) {
       console.log(`Starting text extraction from: ${pdfUrl}`);
 
       try {
+        // Fix 4: Add more robust error handling and headers
         const response = await axios.get(pdfUrl, {
           responseType: "arraybuffer",
           timeout: options.timeout || 30000, // Default timeout 30 sec.
+          headers: {
+            Accept: "*/*",
+            "User-Agent": "RamaytiLibrary/1.0",
+            "Accept-Encoding": "gzip, deflate, br",
+          },
+          maxContentLength: 50 * 1024 * 1024, // 50MB max
           validateStatus: (status) => status === 200,
           ...options.axiosOptions,
         });

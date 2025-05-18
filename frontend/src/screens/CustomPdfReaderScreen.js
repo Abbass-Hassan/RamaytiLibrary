@@ -263,7 +263,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
       }
 
       try {
-        const url = `http://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
+        const url = `https://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
         console.log("Fetching fresh content from URL:", url);
 
         const controller = new AbortController();
