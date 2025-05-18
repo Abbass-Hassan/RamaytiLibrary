@@ -100,7 +100,6 @@ const BooksListScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [usingMockData, setUsingMockData] = useState(false);
-  const [showOfflineBanner, setShowOfflineBanner] = useState(false);
   const route = useRoute();
 
   // Determine if we're in DirectTab by checking the parent route name
@@ -159,13 +158,7 @@ const BooksListScreen = ({ navigation }) => {
   // Check network connectivity
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
-      const wasOffline = isOffline;
       setIsOffline(!state.isConnected);
-
-      // Show offline banner when connection is lost
-      if (state.isConnected === false && !wasOffline) {
-        setShowOfflineBanner(true);
-      }
 
       // If we just came online and have no books, try fetching
       if (state.isConnected && books.length === 0 && !loading) {
@@ -436,14 +429,7 @@ const BooksListScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {isOffline && showOfflineBanner && (
-        <TouchableOpacity
-          style={styles.offlineBanner}
-          onPress={() => setShowOfflineBanner(false)} // Allow dismissing
-        >
-          <Text style={styles.offlineBannerText}>{t("offlineMode")}</Text>
-        </TouchableOpacity>
-      )}
+      {/* Offline banner completely removed */}
       {error && (
         <TouchableOpacity
           style={styles.errorBanner}

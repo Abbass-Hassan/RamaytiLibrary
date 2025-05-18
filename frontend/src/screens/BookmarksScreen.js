@@ -153,7 +153,8 @@ const BookmarksScreen = () => {
         color={colors.primary}
         style={styles.emptyIcon}
       />
-      <Text style={styles.emptyText}>{t("noBookmarksFound")}</Text>
+      <Text style={styles.emptyText}>{t("noBookmarks")}</Text>
+      <Text style={styles.emptySubText}>{t("addBookmarks")}</Text>
     </View>
   );
 
@@ -215,6 +216,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.textSecondary,
     textAlign: "center",
+    marginBottom: 10,
+    fontWeight: "600",
+  },
+  emptySubText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: 20,
   },
   sectionHeader: {
     backgroundColor: colors.background,

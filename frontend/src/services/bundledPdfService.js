@@ -60,18 +60,22 @@ export const initializeBundledPdfs = async () => {
   try {
     console.log("Starting bundled PDF initialization...");
 
-    // First, try to load from cache
+    // First, preload the bundled PDFs from the known mapping to
+    // ensure we always have something available
+    Object.assign(bundledPdfs, KNOWN_BUNDLED_PDFS);
+    console.log(
+      `Added ${Object.keys(KNOWN_BUNDLED_PDFS).length} known bundled PDFs`
+    );
+
+    // Save immediately to ensure even if we fail later, we have these
+    await saveBundledPdfsInfo();
+
+    // Try to load from cache
     const loaded = await loadBundledPdfsInfo();
     if (loaded && Object.keys(bundledPdfs).length > 0) {
       console.log("Using cached bundled PDFs info");
       return Object.keys(bundledPdfs).length;
     }
-
-    // Merge in known bundled PDFs as a starting point
-    Object.assign(bundledPdfs, KNOWN_BUNDLED_PDFS);
-    console.log(
-      `Added ${Object.keys(KNOWN_BUNDLED_PDFS).length} known bundled PDFs`
-    );
 
     // Try to discover more PDFs from the filesystem
     if (Platform.OS === "android") {
@@ -155,6 +159,11 @@ export const initializeBundledPdfs = async () => {
 export const hasBundledPdf = (filename) => {
   if (!filename) return false;
 
+  // Immediately return true for any known bundled PDFs
+  if (KNOWN_BUNDLED_PDFS[filename]) {
+    return true;
+  }
+
   console.log("Checking if bundled PDF exists:", filename);
   console.log("Available bundled PDFs:", Object.keys(bundledPdfs).join(", "));
 
@@ -191,6 +200,11 @@ export const hasBundledPdf = (filename) => {
 // Get path to a bundled PDF by filename
 export const getBundledPdfPath = (filename) => {
   if (!filename) return null;
+
+  // First check the hardcoded known PDFs
+  if (KNOWN_BUNDLED_PDFS[filename]) {
+    return KNOWN_BUNDLED_PDFS[filename];
+  }
 
   const parts = filename.split("/");
   const justFilename = parts[parts.length - 1];

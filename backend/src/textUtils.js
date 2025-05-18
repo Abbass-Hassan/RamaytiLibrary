@@ -18,13 +18,10 @@ function normalizeArabicText(text) {
   // Replace Yeh forms
   normalized = normalized.replace(/[ىئ]/g, "ي");
 
-  // Replace Ta Marbuta with Teh
-  normalized = normalized.replace(/[ة]/g, "ت");
+  // Replace Ta Marbuta with Heh
+  normalized = normalized.replace(/[ة]/g, "ه");
 
-  // Replace Waw variants
-  normalized = normalized.replace(/[ؤ]/g, "و");
-
-  // Remove diacritics (expanded to include all vowel marks)
+  // Remove diacritics (all vowel marks)
   normalized = normalized.replace(/[\u064B-\u065F\u0670]/g, "");
 
   // Remove Tatweel

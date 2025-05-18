@@ -23,6 +23,8 @@
   "filterBooks": "تصفية الكتب...",
   "noBooksFound": "لا توجد كتب مطابقة",
   "booksSelected": "كتب مختارة",
+  "noBookmarks": "لا توجد اشارات مرجعية",
+  "addBookmarks": "قم بإضافة اشارات مرجعية عند قراءة الكتب ليتم عرضها هنا",
 
   "multiplePages": "صفحات متعددة",
   "sectionTest": "قسم الاختبار",
