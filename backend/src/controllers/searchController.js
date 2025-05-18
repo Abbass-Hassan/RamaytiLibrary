@@ -1,11 +1,21 @@
+// backend/src/controllers/searchController.js
+
 const admin = require("../config/firebase");
 const db = admin.firestore();
 const { extractTextFromPdfUrlWithPdfJs } = require("../pdfJsService");
-const { normalizeArabicText } = require("../textUtils");
+const {
+  normalizeArabicText,
+  expandArabicCharactersToRegex,
+} = require("../textUtils");
 
 // Escape special regex characters
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Check if query contains Arabic
+function isArabicQuery(q) {
+  return /[\u0600-\u06FF]/.test(q);
 }
 
 exports.searchPdf = async (req, res) => {
@@ -15,7 +25,7 @@ exports.searchPdf = async (req, res) => {
       return res.status(400).json({ error: "Missing bookId or search query" });
     }
 
-    // Fetch book doc
+    // Check if book doc exists
     const docRef = db.collection("books").doc(bookId);
     const docSnap = await docRef.get();
     if (!docSnap.exists) {
@@ -24,35 +34,43 @@ exports.searchPdf = async (req, res) => {
 
     const bookData = docSnap.data();
 
-    // Extract text from PDF
+    // Extract text with PDF.js
     const pdfText = await extractTextFromPdfUrlWithPdfJs(bookData.pdfPath);
     const pages = pdfText.split("\f");
+    console.log("[searchController.js] pages length:", pages.length);
 
-    // Normalize query
-    const normalizedQuery = normalizeArabicText(q);
+    // Convert search query to regex pattern that matches all character variants
+    const regexPattern = expandArabicCharactersToRegex(q);
 
     let matches = [];
+
     pages.forEach((pageText, index) => {
       const pageNumber = index + 1;
 
-      // Normalize page text
-      const normalizedPageText = normalizeArabicText(pageText);
-
-      // Regex for match with context
-      const regex = new RegExp(
-        `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
-        "giu"
+      // No need to normalize page text - the regex will match all variants
+      console.log(
+        `[searchController.js] Page ${pageNumber} snippet:`,
+        pageText.substring(0, 60)
       );
 
+      // Build a regex with some context, using our expanded pattern
+      const regex = new RegExp(`(.{0,30})(${regexPattern})(.{0,30})`, "giu");
+
       let match;
-      while ((match = regex.exec(normalizedPageText)) !== null) {
+      let matchCount = 0;
+      while ((match = regex.exec(pageText)) !== null) {
         matches.push({
           snippet: match[0],
           page: pageNumber,
         });
+        matchCount++;
       }
+      console.log(
+        `[searchController.js] Found ${matchCount} matches on page ${pageNumber}`
+      );
     });
 
+    console.log("[searchController.js] Total matches:", matches.length);
     res.json({ results: matches });
   } catch (error) {
     console.error("Error in searchPdf:", error);
@@ -82,25 +100,27 @@ exports.searchGlobalMulti = async (req, res) => {
       books = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     }
 
-    // Normalize query
-    const normalizedQuery = normalizeArabicText(q);
+    // Convert search query to regex pattern that matches all character variants
+    const regexPattern = expandArabicCharactersToRegex(q);
 
     let results = [];
+
     for (const book of books) {
       const pdfText = await extractTextFromPdfUrlWithPdfJs(book.pdfPath);
       const pages = pdfText.split("\f");
+      console.log(
+        `[searchController.js] For book ${book.id}, pages:`,
+        pages.length
+      );
 
       pages.forEach((pageText, index) => {
         const pageNumber = index + 1;
-        const normalizedPageText = normalizeArabicText(pageText);
 
-        const regex = new RegExp(
-          `(.{0,30})(${escapeRegExp(normalizedQuery)})(.{0,30})`,
-          "giu"
-        );
+        // Build a regex with our expanded pattern
+        const regex = new RegExp(`(.{0,30})(${regexPattern})(.{0,30})`, "giu");
 
         let match;
-        while ((match = regex.exec(normalizedPageText)) !== null) {
+        while ((match = regex.exec(pageText)) !== null) {
           results.push({
             bookId: book.id,
             bookTitle: book.title,
