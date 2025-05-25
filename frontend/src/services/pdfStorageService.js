@@ -3,7 +3,7 @@ import RNFS from "react-native-fs";
 import { Platform } from "react-native";
 import { hasBundledPdf, getBundledPdfPath } from "./bundledPdfService";
 
-// Document directory for downloaded PDFs
+// Document directory for downloaded PDFs (for future use if needed)
 const PDF_STORAGE_DIR = `${RNFS.DocumentDirectoryPath}/pdfs`;
 
 // Ensure the PDF storage directory exists
@@ -21,7 +21,7 @@ export const ensurePdfStorageDir = async () => {
   }
 };
 
-// Get the local path to a PDF - either bundled or downloaded
+// Get the local path to a PDF - prioritize bundled PDFs
 export const getPdfPath = async (bookId, filename) => {
   // If no filename provided, try to guess from bookId
   if (!filename) {
@@ -35,20 +35,8 @@ export const getPdfPath = async (bookId, filename) => {
     return bundledPath;
   }
 
-  // Next check if we have downloaded this PDF
-  const localPath = `${PDF_STORAGE_DIR}/${filename}`;
-  try {
-    const exists = await RNFS.exists(localPath);
-    if (exists) {
-      console.log(`Using downloaded PDF: ${localPath}`);
-      return localPath;
-    }
-  } catch (error) {
-    console.log(`Error checking for downloaded PDF ${filename}:`, error);
-  }
-
-  // Not found locally
-  console.log(`PDF ${filename} not found locally`);
+  // For non-bundled PDFs (shouldn't happen in offline-first approach)
+  console.log(`PDF ${filename} not found in bundle`);
   return null;
 };
 
@@ -59,57 +47,41 @@ export const getFilenameFromPath = (path) => {
   return parts[parts.length - 1];
 };
 
-// Download a PDF to local storage
-export const downloadPdfToLocal = async (pdfUrl, filename, onProgress) => {
-  try {
-    await ensurePdfStorageDir();
+// Check if a PDF is available offline (bundled)
+export const isPdfAvailableOffline = (filename) => {
+  return hasBundledPdf(filename);
+};
 
-    // Get the filename from the URL if not provided
-    if (!filename) {
-      filename = getFilenameFromPath(pdfUrl);
+// Get the appropriate PDF source for react-native-pdf
+export const getPdfSource = async (bookId, filename, pdfPath) => {
+  // Try to get local path first
+  const localPath = await getPdfPath(bookId, filename);
+
+  if (localPath) {
+    if (Platform.OS === "android" && localPath.startsWith("pdfs/")) {
+      // For Android bundled PDFs, use asset:// protocol
+      return { uri: `bundle-assets://${localPath}` };
+    } else if (Platform.OS === "ios") {
+      // For iOS bundled PDFs, use the full path
+      return { uri: localPath };
     }
-
-    // Skip if this is a bundled PDF
-    if (hasBundledPdf(filename)) {
-      console.log(`PDF ${filename} is bundled, no need to download`);
-      return getBundledPdfPath(filename);
-    }
-
-    const localPath = `${PDF_STORAGE_DIR}/${filename}`;
-
-    // Check if already downloaded
-    const exists = await RNFS.exists(localPath);
-    if (exists) {
-      console.log(`PDF already downloaded: ${localPath}`);
-      return localPath;
-    }
-
-    console.log(`Downloading PDF from ${pdfUrl} to ${localPath}`);
-
-    // Make sure URL starts with http:// or https://
-    if (!pdfUrl.startsWith("http")) {
-      pdfUrl = "https://ramaytilibrary-production.up.railway.app" + pdfUrl;
-    }
-
-    // Download the file
-    const { promise } = RNFS.downloadFile({
-      fromUrl: pdfUrl,
-      toFile: localPath,
-      background: true,
-      progressDivider: 10,
-      progress: onProgress,
-    });
-
-    const result = await promise;
-    if (result.statusCode === 200) {
-      console.log("PDF download complete:", localPath);
-      return localPath;
-    } else {
-      console.error(`Download failed with status ${result.statusCode}`);
-      return null;
-    }
-  } catch (error) {
-    console.error("Error downloading PDF:", error);
-    return null;
   }
+
+  // Fallback to network URL (shouldn't happen in offline-first approach)
+  if (pdfPath && pdfPath.startsWith("http")) {
+    console.log(`Warning: Using network URL for PDF ${filename}`);
+    return { uri: pdfPath };
+  }
+
+  return null;
+};
+
+// Legacy download function - kept for future use if needed
+export const downloadPdfToLocal = async (pdfUrl, filename, onProgress) => {
+  console.log(
+    "Download function called but not needed in offline-first approach"
+  );
+  // In offline-first approach, all PDFs should be bundled
+  // This function is kept for potential future use
+  return null;
 };

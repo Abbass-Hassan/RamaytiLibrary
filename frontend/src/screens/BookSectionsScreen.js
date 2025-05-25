@@ -49,7 +49,7 @@ const BookSectionsScreen = ({ navigation }) => {
 
     try {
       const response = await fetch(
-        "https://ramaytilibrary-production.up.railway.app/api/books"
+        "https://backend-aged-smoke-3335.fly.dev/api/books"
       );
       const data = await response.json();
 
@@ -99,7 +99,7 @@ const BookSectionsScreen = ({ navigation }) => {
       setBooks(updatedBooks);
 
       const response = await fetch(
-        `https://ramaytilibrary-production.up.railway.app/api/books/${bookId}/sections`
+        `https://backend-aged-smoke-3335.fly.dev/api/books/${bookId}/sections`
       );
       const sectionsData = await response.json();
 

@@ -327,8 +327,7 @@ exports.getBookContent = async (req, res) => {
       // If the path is relative (starts with /files/), make it absolute
       if (pdfPath.startsWith("/files/")) {
         const serverUrl =
-          process.env.SERVER_URL ||
-          "https://ramaytilibrary-production.up.railway.app";
+          process.env.SERVER_URL || "https://backend-aged-smoke-3335.fly.dev";
         pdfPath = `${serverUrl}${pdfPath}`;
       }
 

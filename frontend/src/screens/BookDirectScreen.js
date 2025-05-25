@@ -5,6 +5,8 @@ import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import colors from "../config/colors";
 
+const API_BASE_URL = "https://backend-aged-smoke-3335.fly.dev"; // <-- Updated API URL
+
 const BookDirectScreen = ({ route }) => {
   const { bookId, bookTitle } = route.params || {};
   const navigation = useNavigation();
@@ -25,7 +27,7 @@ const BookDirectScreen = ({ route }) => {
         }
 
         const response = await fetch(
-          `http://ramaytilibrary-production.up.railway.app/api/books/${bookId}`
+          `${API_BASE_URL}/api/books/${bookId}` // <-- Updated line
         );
         const data = await response.json();
         console.log("Book info received:", data);

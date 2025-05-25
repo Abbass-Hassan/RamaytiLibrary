@@ -34,7 +34,7 @@ const toArabicNumeral = (num) => {
 // Preload default book cover
 const DEFAULT_BOOK_COVER = require("../assets/book-cover.png");
 
-const SERVER_URL = "https://ramaytilibrary-production.up.railway.app";
+const SERVER_URL = "https://backend-aged-smoke-3335.fly.dev";
 
 const BookVolumesScreen = ({ route, navigation }) => {
   const { t, i18n } = useTranslation();

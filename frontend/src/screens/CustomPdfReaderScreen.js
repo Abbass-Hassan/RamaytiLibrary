@@ -29,6 +29,7 @@ import {
 import {
   initializeBundledPdfs,
   getAllBundledPdfs,
+  getBundledBooks,
 } from "../services/bundledPdfService";
 import colors from "../config/colors";
 import HighlightedText from "./HighlightedText";
@@ -275,7 +276,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
       }
 
       try {
-        const url = `https://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`;
+        const url = `https://backend-aged-smoke-3335.fly.dev/api/books/${effectiveBookId}/content`;
         console.log("Fetching fresh content from URL:", url);
 
         const controller = new AbortController();
@@ -337,12 +338,43 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
 
         console.log("Initializing bundled PDFs...");
         await initializeBundledPdfs();
-        console.log("Bundled PDFs:", JSON.stringify(getAllBundledPdfs()));
 
         const effectiveBookId = bookId || "C2qKmMSFbnMRVbdrfAAn";
         console.log("Getting content for book ID:", effectiveBookId);
 
-        // Try to get cached content first
+        // First, check if we have bundled content for this book
+        const bundledBooks = getBundledBooks();
+        const bundledBook = bundledBooks.find(
+          (book) => book.id === effectiveBookId
+        );
+
+        if (
+          bundledBook &&
+          bundledBook.extractedContent &&
+          bundledBook.extractedContent.length > 0
+        ) {
+          console.log("Using bundled content for book:", effectiveBookId);
+          setBookContent(bundledBook.extractedContent);
+          setNumberOfPages(bundledBook.extractedContent.length);
+
+          if (
+            bundledBook.extractedContent &&
+            bundledBook.extractedContent.length > 0
+          ) {
+            const isArabic = containsArabic(bundledBook.extractedContent[0]);
+            setIsArabicContent(isArabic);
+          }
+
+          setLoading(false);
+          setIsUsingCache(false); // It's bundled, not cached
+
+          // Save to cache for consistency
+          await saveBookContent(effectiveBookId, bundledBook.extractedContent);
+
+          return;
+        }
+
+        // If no bundled content, try to get cached content
         const cachedContent = await getBookContent(effectiveBookId);
 
         const networkState = await NetInfo.fetch();
@@ -376,7 +408,9 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
           return;
         }
 
-        console.log("No cached content, checking for book details...");
+        console.log(
+          "No bundled or cached content, checking for book details..."
+        );
 
         // Try to get book details to extract PDF filename
         let bookData = null;
@@ -386,7 +420,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
           try {
             console.log("Fetching book details...");
             const response = await fetch(
-              `https://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}`
+              `https://backend-aged-smoke-3335.fly.dev/api/books/${effectiveBookId}`
             );
             if (response.ok) {
               bookData = await response.json();
@@ -414,7 +448,7 @@ const CustomPdfReaderScreen = ({ route, navigation }) => {
             try {
               console.log("Extracting content from server...");
               const contentResponse = await fetch(
-                `https://ramaytilibrary-production.up.railway.app/api/books/${effectiveBookId}/content`
+                `https://backend-aged-smoke-3335.fly.dev/api/books/${effectiveBookId}/content`
               );
               if (contentResponse.ok) {
                 const data = await contentResponse.json();

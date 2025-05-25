@@ -18,25 +18,18 @@ import NetInfo from "@react-native-community/netinfo";
 import { useTranslation } from "react-i18next";
 import { I18nManager } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getBundledBooks,
+  initializeBundledPdfs,
+  getBundledImagePath,
+} from "../services/bundledPdfService";
 
 // Ignore network errors in the console
 LogBox.ignoreLogs(["Fetch error", "Network request failed", "Server error"]);
 
 // Base URL for the API
-const BASE_URL = "https://ramaytilibrary-production.up.railway.app";
+const BASE_URL = "https://backend-aged-smoke-3335.fly.dev";
 const API_ENDPOINT = `${BASE_URL}/api/books`;
-
-// Helper function to convert numbers to Arabic numerals
-const toArabicNumeral = (num) => {
-  const arabicNumerals = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
-  return num
-    .toString()
-    .split("")
-    .map((digit) =>
-      isNaN(parseInt(digit)) ? digit : arabicNumerals[parseInt(digit)]
-    )
-    .join("");
-};
 
 // Preload default book cover
 const DEFAULT_BOOK_COVER = require("../assets/book-cover.png");
@@ -50,185 +43,132 @@ const BooksListScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
-  const [usingMockData, setUsingMockData] = useState(false);
   const route = useRoute();
 
   // Determine if we're in DirectTab by checking the parent route name
   const isDirectTab = route.name === "DirectBooksListScreen";
 
-  // Save books to local storage for offline access
-  const saveBooks = async (booksData) => {
-    try {
-      await AsyncStorage.setItem(
-        "cachedBooks",
-        JSON.stringify({
-          timestamp: Date.now(),
-          data: booksData,
-        })
-      );
-      console.log(`Saved ${booksData.length} books to local storage`);
-    } catch (error) {
-      console.error("Error saving books to storage:", error);
-    }
-  };
-
-  // Get cached books from local storage
-  const getCachedBooks = async () => {
-    try {
-      const storedData = await AsyncStorage.getItem("cachedBooks");
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        console.log(
-          `Retrieved ${
-            parsedData.data.length
-          } cached books, stored at ${new Date(parsedData.timestamp)}`
-        );
-        return parsedData.data;
-      }
-      return null;
-    } catch (error) {
-      console.error("Error getting books from storage:", error);
-      return null;
-    }
-  };
-
-  // Check if server is actually reachable
-  const isServerReachable = async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/api/test`, {
-        method: "GET",
-        timeout: 5000,
-      });
-      return response.ok;
-    } catch (error) {
-      console.log("Server connectivity test failed:", error.message);
-      return false;
-    }
-  };
+  // Initialize bundled content on mount
+  useEffect(() => {
+    initializeBooks();
+  }, []);
 
   // Check network connectivity
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
       setIsOffline(!state.isConnected);
-
-      // If we just came online and have no books, try fetching
-      if (state.isConnected && books.length === 0 && !loading) {
-        fetchBooks();
-      }
     });
 
-    // Clean up
     return () => unsubscribe();
-  }, [books.length, loading, isOffline]);
+  }, []);
 
-  const fetchBooks = async () => {
+  const initializeBooks = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Try to get cached books FIRST
-      const cachedBooks = await getCachedBooks();
+      // First, initialize and load bundled books
+      await initializeBundledPdfs();
+      const bundledBooks = getBundledBooks();
 
-      // Check if we're online
-      const networkState = await NetInfo.fetch();
-      const isConnected = networkState.isConnected;
-      setIsOffline(!isConnected);
+      if (bundledBooks && bundledBooks.length > 0) {
+        console.log(`Loaded ${bundledBooks.length} bundled books`);
 
-      // If we have cached books, show them immediately
-      if (cachedBooks && cachedBooks.length > 0) {
-        console.log("Using cached books initially");
-        setBooks(cachedBooks);
-        setUsingMockData(false);
+        // Process bundled books for display
+        const processedBooks = bundledBooks.map((book) => ({
+          ...book,
+          coverImageUrl: book.imagePath
+            ? getBundledImagePath(book.imagePath)
+            : null,
+          isOffline: true, // Mark as offline/bundled book
+        }));
+
+        setBooks(processedBooks);
         setLoading(false);
-      }
-
-      // If we're offline, only use cached data and don't try API
-      if (!isConnected) {
-        setLoading(false);
-
-        if (cachedBooks && cachedBooks.length > 0) {
-          console.log("Offline: Using cached books");
-          setBooks(cachedBooks);
-          setUsingMockData(false);
-        } else {
-          console.log("Offline: No cached books available");
-          setError(
-            "No books available offline. Please connect to the internet."
-          );
-        }
-        return; // Important: Return early to avoid any API calls
-      }
-
-      // If we're online, try to fetch data from the API endpoint
-      try {
-        console.log("Fetching books from API:", API_ENDPOINT);
-        const response = await fetch(API_ENDPOINT, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          timeout: 10000,
-        });
-
-        console.log("API response status:", response.status);
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const responseText = await response.text();
-        console.log("Response content length:", responseText.length);
-        console.log("First 100 chars:", responseText.substring(0, 100));
-
-        let data;
-        try {
-          data = JSON.parse(responseText);
-        } catch (jsonError) {
-          console.error("JSON parse error:", jsonError);
-          throw new Error("Invalid JSON response");
-        }
-
-        console.log(
-          "Books data fetched successfully:",
-          Array.isArray(data) ? data.length : "Not an array"
-        );
-
-        // Process the data
-        const processedBooks = Array.isArray(data)
-          ? data.map(processBook)
-          : data.data && Array.isArray(data.data)
-          ? data.data.map(processBook)
-          : [];
-
-        console.log(`Processed ${processedBooks.length} books`);
-
-        if (processedBooks.length > 0) {
-          setBooks(processedBooks);
-          saveBooks(processedBooks);
-          setUsingMockData(false);
-        } else if (!cachedBooks || cachedBooks.length === 0) {
-          setError("No books found on server.");
-        }
-      } catch (apiError) {
-        console.error("API fetch error:", apiError.message);
-
-        // We already showed cached books, so just log the error
-        if (!cachedBooks || cachedBooks.length === 0) {
-          setError(
-            `Server error: ${apiError.message}. Please try again later.`
-          );
-        }
+      } else {
+        // No bundled books, try to fetch from server
+        console.log("No bundled books found, trying server...");
+        await fetchBooksFromServer();
       }
     } catch (error) {
-      console.error("General error in fetchBooks:", error.message);
-      setError(error.message);
+      console.error("Error initializing books:", error);
+      setError("Failed to load books");
+      setLoading(false);
+    }
+  };
 
-      // Try to use cached books as fallback
-      const cachedBooks = await getCachedBooks();
-      if (cachedBooks && cachedBooks.length > 0) {
-        setBooks(cachedBooks);
-        setUsingMockData(false);
+  const fetchBooksFromServer = async () => {
+    try {
+      // Check if we're online
+      const networkState = await NetInfo.fetch();
+      if (!networkState.isConnected) {
+        setIsOffline(true);
+        setError("No internet connection. Only bundled books are available.");
+        return;
+      }
+
+      console.log("Fetching books from server...");
+      const response = await fetch(API_ENDPOINT, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        timeout: 10000,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`Fetched ${data.length} books from server`);
+
+      // Process server books
+      const processedBooks = data.map((book) => ({
+        ...book,
+        coverImageUrl: book.imagePath
+          ? book.imagePath.startsWith("http")
+            ? book.imagePath
+            : `${BASE_URL}${book.imagePath}`
+          : null,
+        isOffline: false, // Mark as online book
+      }));
+
+      // Merge with bundled books if needed
+      const bundledBooks = getBundledBooks();
+      if (bundledBooks.length > 0) {
+        // Create a map of bundled books by ID for easy lookup
+        const bundledMap = {};
+        bundledBooks.forEach((book) => {
+          bundledMap[book.id] = book;
+        });
+
+        // Update bundled books with any new data from server
+        const mergedBooks = processedBooks.map((serverBook) => {
+          if (bundledMap[serverBook.id]) {
+            // This book is bundled, prefer bundled data
+            return {
+              ...serverBook,
+              ...bundledMap[serverBook.id],
+              coverImageUrl: bundledMap[serverBook.id].imagePath
+                ? getBundledImagePath(bundledMap[serverBook.id].imagePath)
+                : serverBook.coverImageUrl,
+              isOffline: true,
+            };
+          }
+          return serverBook;
+        });
+
+        setBooks(mergedBooks);
+      } else {
+        setBooks(processedBooks);
+      }
+    } catch (error) {
+      console.error("Server fetch error:", error);
+      // Don't override bundled books if server fails
+      if (books.length === 0) {
+        setError("Failed to fetch books from server");
       }
     } finally {
       setLoading(false);
@@ -236,29 +176,11 @@ const BooksListScreen = ({ navigation }) => {
     }
   };
 
-  // Process a book from the API
-  const processBook = (book) => {
-    return {
-      ...book,
-      // Make sure sections is always an array
-      sections: book.sections || [],
-      // Add coverImageUrl
-      coverImageUrl: book.imagePath
-        ? book.imagePath.startsWith("http")
-          ? book.imagePath
-          : `${BASE_URL}${book.imagePath}`
-        : null,
-    };
-  };
-
   const onRefresh = () => {
     setRefreshing(true);
-    fetchBooks();
+    // Only try to fetch from server on refresh
+    fetchBooksFromServer();
   };
-
-  useEffect(() => {
-    fetchBooks();
-  }, []);
 
   const handleBookPress = (book) => {
     if (book.sections && book.sections.length > 0) {
@@ -289,42 +211,65 @@ const BooksListScreen = ({ navigation }) => {
     return parts[parts.length - 1];
   };
 
+  const renderBookImage = (item) => {
+    if (!item.coverImageUrl) {
+      return (
+        <Image
+          source={DEFAULT_BOOK_COVER}
+          style={styles.coverImage}
+          resizeMode="cover"
+        />
+      );
+    }
+
+    // For bundled images on Android
+    if (
+      item.isOffline &&
+      Platform.OS === "android" &&
+      item.coverImageUrl.startsWith("asset:")
+    ) {
+      return (
+        <Image
+          source={{ uri: item.coverImageUrl }}
+          style={styles.coverImage}
+          resizeMode="cover"
+        />
+      );
+    }
+
+    // For bundled images on iOS
+    if (item.isOffline && Platform.OS === "ios") {
+      return (
+        <Image
+          source={{ uri: item.coverImageUrl }}
+          style={styles.coverImage}
+          resizeMode="cover"
+        />
+      );
+    }
+
+    // For online images
+    return (
+      <Image
+        source={{ uri: item.coverImageUrl }}
+        style={styles.coverImage}
+        resizeMode="cover"
+      />
+    );
+  };
+
   const renderItem = ({ item, index }) => (
     <TouchableOpacity onPress={() => handleBookPress(item)} style={styles.card}>
       <View style={styles.coverContainer}>
-        {item.coverImageUrl ? (
-          // FIX: Remove defaultSource on Android to prevent the error
-          Platform.OS === "ios" ? (
-            <Image
-              source={{ uri: item.coverImageUrl }}
-              style={styles.coverImage}
-              resizeMode="cover"
-              defaultSource={DEFAULT_BOOK_COVER}
-            />
-          ) : (
-            <Image
-              source={{ uri: item.coverImageUrl }}
-              style={styles.coverImage}
-              resizeMode="cover"
-              // No defaultSource on Android
-            />
-          )
-        ) : (
-          <Image
-            source={DEFAULT_BOOK_COVER}
-            style={styles.coverImage}
-            resizeMode="cover"
-          />
-        )}
+        {renderBookImage(item)}
         <View style={styles.titleOverlay}>
           <Text style={styles.bookTitle} numberOfLines={2}>
             {item.title}
           </Text>
         </View>
-        {/* Volume count indicator removed as requested */}
-        {isOffline && (
+        {item.isOffline && (
           <View style={styles.offlineBadge}>
-            <Text style={styles.offlineBadgeText}>{t("offline")}</Text>
+            <Text style={styles.offlineBadgeText}>✓</Text>
           </View>
         )}
       </View>
@@ -342,7 +287,6 @@ const BooksListScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Offline banner completely removed */}
       {error && (
         <TouchableOpacity
           style={styles.errorBanner}
@@ -402,15 +346,6 @@ const styles = StyleSheet.create({
     color: "#b71c1c",
     fontWeight: "bold",
   },
-  offlineBanner: {
-    backgroundColor: "rgba(255, 152, 0, 0.7)", // More transparent
-    padding: 5,
-    alignItems: "center",
-  },
-  offlineBannerText: {
-    color: "white",
-    fontWeight: "bold",
-  },
   listContainer: {
     paddingBottom: 20,
     paddingHorizontal: 10,
@@ -453,19 +388,20 @@ const styles = StyleSheet.create({
     color: "white",
     textAlign: "center",
   },
-  // Styles for section indicator removed
   offlineBadge: {
     position: "absolute",
     top: 10,
-    left: 10,
-    backgroundColor: "#ff9800",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    right: 10,
+    backgroundColor: "#4caf50",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
   offlineBadgeText: {
     color: "white",
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: "bold",
   },
   emptyText: {

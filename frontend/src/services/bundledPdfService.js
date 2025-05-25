@@ -6,22 +6,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // In Android, the assets path should NOT include any leading slash
 const BUNDLED_PDF_PATH =
   Platform.OS === "ios" ? `${RNFS.MainBundlePath}/pdfs` : "pdfs";
+const BUNDLED_IMAGES_PATH =
+  Platform.OS === "ios" ? `${RNFS.MainBundlePath}/images` : "images";
+const BUNDLED_BOOKS_JSON =
+  Platform.OS === "ios" ? `${RNFS.MainBundlePath}/books.json` : "books.json";
 
 // Map of book IDs to their bundled PDF filenames
 const bundledPdfs = {};
 
-// Hardcoded map of known bundled PDFs - this serves as a fallback
-// when file system operations fail
-const KNOWN_BUNDLED_PDFS = {
-  "174534127-92879.pdf": "pdfs/174534127-92879.pdf",
-  "174534175-95989.pdf": "pdfs/174534175-95989.pdf",
-  "174568508-65869.pdf": "pdfs/174568508-65869.pdf",
-  "arabic_text_test.pdf": "pdfs/arabic_text_test.pdf",
-  // Add more bundled PDFs here as you add them to the app
-};
+// Bundled books data
+let bundledBooksData = [];
 
-// Cache key for storing bundled PDF info
+// Cache keys
 const BUNDLED_PDFS_CACHE_KEY = "bundled_pdfs_info";
+const BUNDLED_BOOKS_DATA_KEY = "bundled_books_data";
 
 // Save the bundled PDFs info to AsyncStorage
 const saveBundledPdfsInfo = async () => {
@@ -36,118 +34,108 @@ const saveBundledPdfsInfo = async () => {
   }
 };
 
-// Load the bundled PDFs info from AsyncStorage
-const loadBundledPdfsInfo = async () => {
+// Load the bundled books data
+export const loadBundledBooksData = async () => {
   try {
-    const info = await AsyncStorage.getItem(BUNDLED_PDFS_CACHE_KEY);
-    if (info) {
-      const parsed = JSON.parse(info);
-      Object.assign(bundledPdfs, parsed);
-      console.log(
-        `Loaded ${Object.keys(bundledPdfs).length} bundled PDFs from cache`
-      );
-      return true;
+    console.log("Loading bundled books data...");
+
+    // Try to load from cache first
+    const cached = await AsyncStorage.getItem(BUNDLED_BOOKS_DATA_KEY);
+    if (cached) {
+      bundledBooksData = JSON.parse(cached);
+      console.log(`Loaded ${bundledBooksData.length} books from cache`);
+
+      // Also rebuild the PDF mapping
+      bundledBooksData.forEach((book) => {
+        if (book.pdfFilename) {
+          bundledPdfs[
+            book.pdfFilename
+          ] = `${BUNDLED_PDF_PATH}/${book.pdfFilename}`;
+        }
+        if (book.sections) {
+          book.sections.forEach((section) => {
+            if (section.pdfFilename) {
+              bundledPdfs[
+                section.pdfFilename
+              ] = `${BUNDLED_PDF_PATH}/${section.pdfFilename}`;
+            }
+          });
+        }
+      });
+
+      return bundledBooksData;
     }
-    return false;
+
+    // Load books.json from assets
+    let booksJson;
+    if (Platform.OS === "android") {
+      // Read from Android assets
+      try {
+        booksJson = await RNFS.readFileAssets(BUNDLED_BOOKS_JSON, "utf8");
+      } catch (error) {
+        console.log("Error reading books.json from assets:", error);
+        // Try without 'utf8' encoding
+        booksJson = await RNFS.readFileAssets(BUNDLED_BOOKS_JSON);
+      }
+    } else {
+      // Read from iOS bundle
+      booksJson = await RNFS.readFile(BUNDLED_BOOKS_JSON, "utf8");
+    }
+
+    bundledBooksData = JSON.parse(booksJson);
+    console.log(`Loaded ${bundledBooksData.length} books from books.json`);
+
+    // Build PDF mapping
+    bundledBooksData.forEach((book) => {
+      if (book.pdfFilename) {
+        bundledPdfs[
+          book.pdfFilename
+        ] = `${BUNDLED_PDF_PATH}/${book.pdfFilename}`;
+      }
+      if (book.sections) {
+        book.sections.forEach((section) => {
+          if (section.pdfFilename) {
+            bundledPdfs[
+              section.pdfFilename
+            ] = `${BUNDLED_PDF_PATH}/${section.pdfFilename}`;
+          }
+        });
+      }
+    });
+
+    // Cache the data
+    await AsyncStorage.setItem(
+      BUNDLED_BOOKS_DATA_KEY,
+      JSON.stringify(bundledBooksData)
+    );
+    await saveBundledPdfsInfo();
+
+    return bundledBooksData;
   } catch (error) {
-    console.error("Error loading bundled PDFs info:", error);
-    return false;
+    console.error("Error loading bundled books data:", error);
+    return [];
   }
 };
 
-// Initialize the list of bundled PDFs
+// Get all bundled books
+export const getBundledBooks = () => {
+  return bundledBooksData;
+};
+
+// Initialize the bundled PDFs and books data
 export const initializeBundledPdfs = async () => {
   try {
     console.log("Starting bundled PDF initialization...");
 
-    // First, preload the bundled PDFs from the known mapping to
-    // ensure we always have something available
-    Object.assign(bundledPdfs, KNOWN_BUNDLED_PDFS);
-    console.log(
-      `Added ${Object.keys(KNOWN_BUNDLED_PDFS).length} known bundled PDFs`
-    );
-
-    // Save immediately to ensure even if we fail later, we have these
-    await saveBundledPdfsInfo();
-
-    // Try to load from cache
-    const loaded = await loadBundledPdfsInfo();
-    if (loaded && Object.keys(bundledPdfs).length > 0) {
-      console.log("Using cached bundled PDFs info");
-      return Object.keys(bundledPdfs).length;
-    }
-
-    // Try to discover more PDFs from the filesystem
-    if (Platform.OS === "android") {
-      try {
-        console.log("Reading Android assets directory:", BUNDLED_PDF_PATH);
-        const files = await RNFS.readDirAssets(BUNDLED_PDF_PATH);
-        console.log("Found files in assets:", JSON.stringify(files));
-
-        files.forEach((file) => {
-          if (file.name.endsWith(".pdf")) {
-            // Store by filename without extension as key
-            const fileKey = file.name.replace(".pdf", "");
-            bundledPdfs[fileKey] = `${BUNDLED_PDF_PATH}/${file.name}`;
-            console.log(
-              `Added bundled PDF: ${file.name} → ${bundledPdfs[fileKey]}`
-            );
-
-            // Also store with full filename as key for better matching
-            bundledPdfs[file.name] = `${BUNDLED_PDF_PATH}/${file.name}`;
-          }
-        });
-      } catch (error) {
-        console.log("Error reading bundled PDFs from assets:", error.message);
-        // Try with a different path format as fallback
-        try {
-          console.log("Trying fallback path for Android assets");
-          const fallbackPath = "pdfs"; // No leading slash
-          const files = await RNFS.readDirAssets(fallbackPath);
-          console.log("Found files in fallback path:", JSON.stringify(files));
-
-          files.forEach((file) => {
-            if (file.name.endsWith(".pdf")) {
-              const fileKey = file.name.replace(".pdf", "");
-              bundledPdfs[fileKey] = `${fallbackPath}/${file.name}`;
-              bundledPdfs[file.name] = `${fallbackPath}/${file.name}`;
-              console.log(`Added bundled PDF (fallback): ${file.name}`);
-            }
-          });
-        } catch (fbError) {
-          console.log("Fallback path also failed:", fbError.message);
-        }
-      }
-    } else if (Platform.OS === "ios") {
-      // iOS implementation remains the same
-      try {
-        console.log("Reading iOS bundle directory:", BUNDLED_PDF_PATH);
-        const files = await RNFS.readDir(BUNDLED_PDF_PATH);
-        console.log("Found files in bundle:", JSON.stringify(files));
-
-        files.forEach((file) => {
-          if (file.name.endsWith(".pdf")) {
-            const fileKey = file.name.replace(".pdf", "");
-            bundledPdfs[fileKey] = file.path;
-            bundledPdfs[file.name] = file.path;
-            console.log(`Added bundled PDF: ${file.name}`);
-          }
-        });
-      } catch (error) {
-        console.log(
-          "Error reading bundled PDFs from iOS bundle:",
-          error.message
-        );
-      }
-    }
-
-    // Save the bundled PDFs info to cache
-    await saveBundledPdfsInfo();
+    // Load books data which also populates PDF mapping
+    const books = await loadBundledBooksData();
 
     console.log(
-      `Initialized ${Object.keys(bundledPdfs).length} bundled PDFs:`,
-      Object.keys(bundledPdfs).join(", ")
+      `Initialized ${books.length} bundled books with ${
+        Object.keys(bundledPdfs).length
+      } PDFs`
     );
+
     return Object.keys(bundledPdfs).length;
   } catch (error) {
     console.log("Error initializing bundled PDFs:", error.message);
@@ -159,52 +147,31 @@ export const initializeBundledPdfs = async () => {
 export const hasBundledPdf = (filename) => {
   if (!filename) return false;
 
-  // Immediately return true for any known bundled PDFs
-  if (KNOWN_BUNDLED_PDFS[filename]) {
-    return true;
-  }
-
-  console.log("Checking if bundled PDF exists:", filename);
-  console.log("Available bundled PDFs:", Object.keys(bundledPdfs).join(", "));
-
   // Extract just the filename if it contains path information
   const parts = filename.split("/");
   const justFilename = parts[parts.length - 1];
 
-  // Check various ways the PDF might be referenced
+  console.log("Checking if bundled PDF exists:", justFilename);
+
   if (bundledPdfs[justFilename]) {
-    console.log("Found exact match by filename:", justFilename);
+    console.log("Found bundled PDF:", justFilename);
     return true;
   }
 
+  // Check without .pdf extension
   const fileKey = justFilename.replace(".pdf", "");
   if (bundledPdfs[fileKey]) {
-    console.log("Found match by filename without extension:", fileKey);
+    console.log("Found bundled PDF by key:", fileKey);
     return true;
   }
 
-  // Check if any bundled PDF path contains this filename
-  const matchByPath = Object.values(bundledPdfs).some((path) =>
-    path.includes(justFilename)
-  );
-
-  if (matchByPath) {
-    console.log("Found match by path inclusion");
-    return true;
-  }
-
-  console.log("No bundled PDF match found for:", filename);
+  console.log("No bundled PDF found for:", justFilename);
   return false;
 };
 
 // Get path to a bundled PDF by filename
 export const getBundledPdfPath = (filename) => {
   if (!filename) return null;
-
-  // First check the hardcoded known PDFs
-  if (KNOWN_BUNDLED_PDFS[filename]) {
-    return KNOWN_BUNDLED_PDFS[filename];
-  }
 
   const parts = filename.split("/");
   const justFilename = parts[parts.length - 1];
@@ -219,13 +186,23 @@ export const getBundledPdfPath = (filename) => {
     return bundledPdfs[fileKey];
   }
 
-  // Find the first path that includes this filename
-  const matchingPath = Object.values(bundledPdfs).find((path) =>
-    path.includes(justFilename)
-  );
+  console.log("No bundled PDF path found for:", filename);
+  return null;
+};
 
-  console.log("Returning bundled PDF path:", matchingPath || "null");
-  return matchingPath || null;
+// Get bundled image path
+export const getBundledImagePath = (imagePath) => {
+  if (!imagePath) return null;
+
+  // Extract filename from path
+  const parts = imagePath.split("/");
+  const filename = parts[parts.length - 1];
+
+  if (Platform.OS === "android") {
+    return `asset:/images/${filename}`;
+  } else {
+    return `${RNFS.MainBundlePath}/images/${filename}`;
+  }
 };
 
 // Get list of all bundled PDF paths

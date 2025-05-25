@@ -68,8 +68,10 @@ app.get("/api/test", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`File access URL: http://localhost:${PORT}/files/test.pdf`);
-  console.log(`Image access URL: http://localhost:${PORT}/images/test.jpg`);
+const HOST = "0.0.0.0"; // <-- This is required for Fly.io
+
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
+  console.log(`File access URL: http://${HOST}:${PORT}/files/test.pdf`);
+  console.log(`Image access URL: http://${HOST}:${PORT}/images/test.jpg`);
 });
